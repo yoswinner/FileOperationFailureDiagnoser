@@ -1,0 +1,14 @@
+# File Operation Failure Diagnoser - Dependencies
+# Python 3.8+ required
+
+# Cross-platform process utilities (used for process info enrichment)
+psutil>=5.9.0
+
+# Windows-specific (install only on Windows)
+# pywin32>=306
+
+# GUI (future milestone)
+# PyQt6>=6.5.0
+
+# Testing
+pytest>=7.0.0
