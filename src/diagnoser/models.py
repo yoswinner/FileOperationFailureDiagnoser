@@ -109,6 +109,51 @@ class PermissionCheckResult:
 
 
 # ======================================================================
+# Diagnosis Engine models (Milestone 3)
+# ======================================================================
+
+class DiagnosisType(Enum):
+    """Classification of the primary reason a file operation would fail.
+
+    The diagnosis engine evaluates analyzers in a fixed priority order
+    and assigns exactly one DiagnosisType per diagnosis run.
+    """
+    FILE_NOT_FOUND = "file_not_found"
+    FILE_LOCKED = "file_locked"
+    PERMISSION_DENIED = "permission_denied"
+    READ_ONLY = "read_only"
+    OPERATION_ALLOWED = "operation_allowed"
+    UNKNOWN_ERROR = "unknown_error"
+
+
+@dataclass
+class DiagnosisResult:
+    """Structured output from the diagnosis engine.
+
+    Contains enough information for a CLI or GUI to display a
+    human-readable summary of why a file operation would fail.
+
+    Attributes:
+        file_path: The absolute path of the file that was diagnosed.
+        operation: The requested file operation (e.g. 'write').
+        diagnosis: The primary DiagnosisType classification.
+        reason: A human-readable explanation of the diagnosis.
+        suggested_action: An actionable recommendation for the user.
+        lock_result: The raw LockDetectionResult, if a lock check
+                     was performed.  None otherwise.
+        permission_result: The raw PermissionCheckResult, if a
+                           permission check was performed.  None otherwise.
+    """
+    file_path: str
+    operation: str = ""
+    diagnosis: DiagnosisType = DiagnosisType.UNKNOWN_ERROR
+    reason: str = ""
+    suggested_action: str = ""
+    lock_result: Optional[LockDetectionResult] = None
+    permission_result: Optional[PermissionCheckResult] = None
+
+
+# ======================================================================
 # Generic Analyzer Result (used by future modules)
 # ======================================================================
 

@@ -10,6 +10,8 @@ import pytest
 
 from diagnoser.models import (
     AnalyzerResult,
+    DiagnosisResult,
+    DiagnosisType,
     FileOperation,
     LockDetectionResult,
     PermissionCheckResult,
@@ -163,3 +165,51 @@ class TestFileOperation:
 
     def test_enum_membership(self):
         assert len(FileOperation) == 4
+
+
+class TestDiagnosisType:
+    """Tests for the DiagnosisType enum."""
+
+    def test_enum_values(self):
+        assert DiagnosisType.FILE_NOT_FOUND.value == "file_not_found"
+        assert DiagnosisType.FILE_LOCKED.value == "file_locked"
+        assert DiagnosisType.PERMISSION_DENIED.value == "permission_denied"
+        assert DiagnosisType.READ_ONLY.value == "read_only"
+        assert DiagnosisType.OPERATION_ALLOWED.value == "operation_allowed"
+        assert DiagnosisType.UNKNOWN_ERROR.value == "unknown_error"
+
+    def test_enum_membership(self):
+        assert len(DiagnosisType) == 6
+
+
+class TestDiagnosisResult:
+    """Tests for the DiagnosisResult dataclass."""
+
+    def test_defaults(self):
+        result = DiagnosisResult(file_path="/some/file.txt")
+        assert result.file_path == "/some/file.txt"
+        assert result.operation == ""
+        assert result.diagnosis == DiagnosisType.UNKNOWN_ERROR
+        assert result.reason == ""
+        assert result.suggested_action == ""
+        assert result.lock_result is None
+        assert result.permission_result is None
+
+    def test_populated_result(self):
+        result = DiagnosisResult(
+            file_path=r"C:\test.txt",
+            operation="write",
+            diagnosis=DiagnosisType.FILE_LOCKED,
+            reason="File is currently locked by notepad.exe (PID 1234).",
+            suggested_action="Close the process holding the file and retry.",
+            lock_result=LockDetectionResult(
+                file_path=r"C:\test.txt",
+                is_locked=True,
+                processes=[ProcessInfo(process_name="notepad.exe", pid=1234)],
+                detection_method="restart_manager",
+            ),
+        )
+        assert result.diagnosis == DiagnosisType.FILE_LOCKED
+        assert result.lock_result is not None
+        assert result.lock_result.is_locked is True
+        assert result.permission_result is None
