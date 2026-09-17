@@ -181,7 +181,21 @@ class TestProcessLockAnalyzerWindows:
                 assert proc.pid > 0
                 assert isinstance(proc.process_name, str)
         finally:
-            holder.terminate()
-            holder.wait()
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
+            # Ensure the subprocess is fully stopped before cleanup.
+            # On Windows, terminate() sends SIGTERM which Python may not
+            # handle immediately; kill() forces a hard stop.
+            holder.kill()
+            try:
+                holder.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+
+            # Windows may not release the file handle instantly after
+            # process termination. Retry deletion briefly.
+            for attempt in range(5):
+                try:
+                    if os.path.exists(temp_path):
+                        os.unlink(temp_path)
+                    break
+                except PermissionError:
+                    time.sleep(0.5)

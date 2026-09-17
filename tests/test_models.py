@@ -8,7 +8,13 @@ cross-platform and run on macOS, Linux, and Windows.
 
 import pytest
 
-from diagnoser.models import AnalyzerResult, LockDetectionResult, ProcessInfo
+from diagnoser.models import (
+    AnalyzerResult,
+    FileOperation,
+    LockDetectionResult,
+    PermissionCheckResult,
+    ProcessInfo,
+)
 
 
 class TestProcessInfo:
@@ -104,3 +110,56 @@ class TestAnalyzerResult:
         assert result.detected is True
         assert result.severity == "warning"
         assert len(result.evidence) == 1
+
+
+class TestPermissionCheckResult:
+    """Tests for the PermissionCheckResult dataclass."""
+
+    def test_defaults(self):
+        result = PermissionCheckResult(file_path="/some/file.txt")
+        assert result.file_path == "/some/file.txt"
+        assert result.operation == ""
+        assert result.permitted is False
+        assert result.owner == ""
+        assert result.current_user == ""
+        assert result.details == ""
+        assert result.permission_bits == {}
+        assert result.error is None
+        assert result.detection_method == ""
+
+    def test_populated_result(self):
+        result = PermissionCheckResult(
+            file_path=r"C:\test.txt",
+            operation="write",
+            permitted=False,
+            owner=r"BUILTIN\Administrators",
+            current_user="testuser",
+            details="WRITE access is DENIED for user 'testuser'.",
+            permission_bits={"read": True, "write": False, "execute": False},
+            detection_method="windows_acl",
+        )
+        assert result.permitted is False
+        assert result.owner == r"BUILTIN\Administrators"
+        assert result.permission_bits["read"] is True
+        assert result.permission_bits["write"] is False
+        assert result.detection_method == "windows_acl"
+
+    def test_permission_bits_independent_across_instances(self):
+        """Ensure the default mutable dict is not shared between instances."""
+        r1 = PermissionCheckResult(file_path="a.txt")
+        r2 = PermissionCheckResult(file_path="b.txt")
+        r1.permission_bits["read"] = True
+        assert "read" not in r2.permission_bits
+
+
+class TestFileOperation:
+    """Tests for the FileOperation enum."""
+
+    def test_enum_values(self):
+        assert FileOperation.READ.value == "read"
+        assert FileOperation.WRITE.value == "write"
+        assert FileOperation.EXECUTE.value == "execute"
+        assert FileOperation.DELETE.value == "delete"
+
+    def test_enum_membership(self):
+        assert len(FileOperation) == 4

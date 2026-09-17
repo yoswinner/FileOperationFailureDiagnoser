@@ -50,11 +50,11 @@ FileOperationFailureDiagnoser/
 └── requirements.txt
 ```
 
-## Current Status — Milestone 1
+## Current Status — Milestone 2
 
 ✅ Project architecture  
 ✅ Process/file-lock detection module (Windows Restart Manager API)  
-⬜ Permission/ownership analysis  
+✅ Permission/ownership analysis (os.access + Windows advapi32.dll)  
 ⬜ File attribute analysis  
 ⬜ Synchronisation conflict detection  
 ⬜ Diagnosis engine  
