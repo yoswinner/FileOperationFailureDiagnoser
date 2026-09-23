@@ -20,7 +20,7 @@ without automatically modifying the system.
 
 ## Technology Stack
 - Python 3.8+
-- PyQt6 (GUI — future milestone)
+- Tkinter (desktop GUI — bundled with Python)
 - psutil (process information)
 - ctypes / Windows Restart Manager API (file-lock detection)
 
@@ -33,33 +33,50 @@ FileOperationFailureDiagnoser/
 │   ├── analyzers/
 │   │   ├── base.py                # Abstract analyzer interface
 │   │   ├── process_lock.py        # Process/file-lock detection
-│   │   ├── permissions.py         # (stub) Permission analysis
+│   │   ├── permissions.py         # Permission/ownership analysis
 │   │   ├── file_attributes.py     # (stub) File attribute analysis
 │   │   └── sync_conflict.py       # (stub) Sync conflict detection
 │   ├── engine/
-│   │   └── diagnosis.py           # (stub) Rule-based diagnosis engine
+│   │   └── diagnosis.py           # Rule-based diagnosis engine
 │   ├── recommendations/
 │   │   └── recommender.py         # (stub) Safe recommendation generator
 │   └── gui/
-│       └── main_window.py         # (stub) PyQt6 GUI
+│       ├── app.py                 # Application entry point
+│       └── main_window.py         # Tkinter desktop GUI
 ├── tests/
 │   ├── test_models.py             # Data model tests
-│   └── test_process_lock.py       # Lock detection tests
+│   ├── test_process_lock.py       # Lock detection tests
+│   ├── test_permissions.py        # Permission analysis tests
+│   └── test_diagnoser.py          # Diagnosis engine tests
 ├── scripts/
 │   └── test_lock_demo.py          # Interactive demo script
 └── requirements.txt
 ```
 
-## Current Status — Milestone 3
+## Current Status
 
-✅ Project architecture  
-✅ Process/file-lock detection module (Windows Restart Manager API)  
-✅ Permission/ownership analysis (os.access + Windows advapi32.dll)  
-✅ Diagnosis engine (rule-based, deterministic)  
-⬜ File attribute analysis  
-⬜ Synchronisation conflict detection  
-⬜ Recommendations engine  
-⬜ Desktop GUI  
+✅ Process/file-lock detection module (Windows Restart Manager API)
+✅ Permission/ownership analysis (os.access + Windows advapi32.dll)
+✅ Diagnosis engine (rule-based, deterministic)
+✅ Desktop GUI (Tkinter — first functional prototype)
+⬜ File attribute analysis
+⬜ Synchronisation conflict detection
+⬜ Advanced recommendation engine
+
+## Launching the GUI
+
+From the project root directory:
+
+```bash
+# Windows (with project venv)
+.\venv\Scripts\Python.exe -m diagnoser.gui.app
+
+# macOS / Linux
+python -m diagnoser.gui.app
+```
+
+The GUI connects directly to the existing `DiagnosisEngine` backend.
+All results shown are real — there is no mock data.
 
 ## Setup
 

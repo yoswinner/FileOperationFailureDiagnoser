@@ -28,3 +28,6 @@ Thumbs.db
 # Distribution
 *.tar.gz
 *.whl
+
+# Microsoft Office temporary files
+~$*

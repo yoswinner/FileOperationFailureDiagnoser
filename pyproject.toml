@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diagnoser"
+version = "0.1.0"
+description = "A Windows-focused diagnostic tool that identifies why file operations may fail."
+requires-python = ">=3.8"
+dependencies = [
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
