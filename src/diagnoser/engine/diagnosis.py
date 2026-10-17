@@ -1,70 +1,91 @@
 """
 Rule-Based Diagnosis Engine.
 
-Consumes structured results from the lock and permission analyzers
-and produces a single, ranked DiagnosisResult identifying the primary
-reason a requested file operation would fail.
+Orchestrates the four peer analyzers:
+    1. ProcessLockAnalyzer      — active file handle and locker detection
+    2. PermissionAnalyzer       — effective access rights and owner resolution
+    3. FileAttributeAnalyzer    — filesystem attributes (readonly, hidden, system, offline)
+    4. SyncConflictAnalyzer     — cloud-sync root association and conflict analysis
 
-Decision order (deterministic, highest-priority first):
+Consolidates their structured evidence, applies a deterministic priority
+decision policy, and attaches actionable guidance from the standalone Recommender.
 
-    1. FILE_NOT_FOUND  — the file does not exist.
-    2. FILE_LOCKED     — a process holds the file open.
-    3. PERMISSION_DENIED / READ_ONLY
-                       — the current user lacks the required access.
-    4. OPERATION_ALLOWED — no issues detected.
+Decision Priority Order:
+    1. FILE_NOT_FOUND   — file does not exist on disk (skips downstream checks)
+    2. SYNC_CONFLICT    — confirmed lock held by a supported cloud-sync daemon
+    3. FILE_LOCKED      — file held by an ordinary application process
+    4. READ_ONLY        — write/delete blocked by read-only attribute or permissions
+    5. PERMISSION_DENIED — requested operation denied by filesystem permissions
+    6. OPERATION_ALLOWED — all checks completed with no blocking condition detected
+    7. UNKNOWN_ERROR    — critical inspection failure or indeterminate state
 
-The engine delegates all detection to the existing analyzers.
-It never calls Windows APIs directly and never modifies the system.
-
-Design:
-    - Accepts optional pre-built analyzer instances for testability
-      (dependency injection).
-    - All Windows-specific logic remains inside the analyzers.
-    - The engine is fully deterministic and explainable.
+Safety Policy:
+    Strictly read-only and non-destructive. Never terminates processes, never modifies
+    files or attributes, and never alters registry or permission configurations.
 """
 
 import os
+from typing import Optional, Tuple
 
+from diagnoser.analyzers.file_attributes import FileAttributeAnalyzer
 from diagnoser.analyzers.permissions import PermissionAnalyzer
 from diagnoser.analyzers.process_lock import ProcessLockAnalyzer
+from diagnoser.analyzers.sync_conflict import SyncConflictAnalyzer, correlate_sync_lock
 from diagnoser.models import (
     DiagnosisResult,
     DiagnosisType,
+    FileAttributeResult,
     FileOperation,
     LockDetectionResult,
     PermissionCheckResult,
+    SyncConflictResult,
 )
+from diagnoser.recommendations.recommender import Recommender
+
+
+PROVIDER_DISPLAY_NAMES = {
+    "onedrive": "OneDrive",
+    "google_drive": "Google Drive",
+}
 
 
 class DiagnosisEngine:
     """Produces a human-readable diagnosis for a file operation.
 
-    The engine runs the lock and permission analyzers in order and
-    returns a DiagnosisResult classifying the primary failure cause.
+    Runs the four peer analyzers and produces a single, ranked DiagnosisResult
+    identifying the primary reason a requested file operation would fail,
+    while attaching all supporting structured evidence.
 
     Usage:
         engine = DiagnosisEngine()
         result = engine.diagnose(r"C:\\data.txt", FileOperation.WRITE)
-        print(result.diagnosis)   # DiagnosisType.FILE_LOCKED
-        print(result.reason)      # "File is currently locked by ..."
-        print(result.suggested_action)
+        print(result.diagnosis)         # DiagnosisType.FILE_LOCKED
+        print(result.reason)            # "File is currently locked by ..."
+        print(result.suggested_action)  # Actionable advice from Recommender
     """
 
     def __init__(
         self,
-        lock_analyzer=None,
-        permission_analyzer=None,
+        lock_analyzer: Optional[ProcessLockAnalyzer] = None,
+        permission_analyzer: Optional[PermissionAnalyzer] = None,
+        attribute_analyzer: Optional[FileAttributeAnalyzer] = None,
+        sync_analyzer: Optional[SyncConflictAnalyzer] = None,
+        recommender: Optional[Recommender] = None,
     ):
         """Initialise the engine with optional analyzer overrides.
 
         Args:
-            lock_analyzer: A ProcessLockAnalyzer instance.  If None,
-                           a default instance is created.
-            permission_analyzer: A PermissionAnalyzer instance.  If None,
-                                 a default instance is created.
+            lock_analyzer: ProcessLockAnalyzer instance or override.
+            permission_analyzer: PermissionAnalyzer instance or override.
+            attribute_analyzer: FileAttributeAnalyzer instance or override.
+            sync_analyzer: SyncConflictAnalyzer instance or override.
+            recommender: Recommender instance or override.
         """
         self._lock_analyzer = lock_analyzer or ProcessLockAnalyzer()
         self._perm_analyzer = permission_analyzer or PermissionAnalyzer()
+        self._attr_analyzer = attribute_analyzer or FileAttributeAnalyzer()
+        self._sync_analyzer = sync_analyzer or SyncConflictAnalyzer()
+        self._recommender = recommender or Recommender()
 
     def diagnose(
         self,
@@ -73,96 +94,222 @@ class DiagnosisEngine:
     ) -> DiagnosisResult:
         """Run the diagnosis pipeline for *file_path* and *operation*.
 
-        Decision order:
-            1. Does the file exist?          → FILE_NOT_FOUND
-            2. Is the file locked?           → FILE_LOCKED
-            3. Is the operation permitted?   → PERMISSION_DENIED / READ_ONLY
-            4. All checks pass               → OPERATION_ALLOWED
-
         Args:
-            file_path: Path to the file to diagnose.
-            operation: The intended file operation.
+            file_path: Path to the target file.
+            operation: The intended file operation (READ, WRITE, EXECUTE, DELETE).
 
         Returns:
-            DiagnosisResult with a single primary diagnosis.
+            DiagnosisResult containing primary diagnosis, human-readable reason,
+            recommender advice, and all four raw analyzer results.
         """
-        # Normalise path consistently with the analyzers
+        # Normalise path and operation
         file_path = os.path.abspath(os.path.normpath(file_path))
+        if isinstance(operation, str):
+            try:
+                operation = FileOperation(operation.lower())
+            except ValueError:
+                operation = FileOperation.READ
+        op_str = operation.value
 
-        # ── Step 1: File existence ──────────────────────────────────
+        # ── Step 1: Missing Target (FILE_NOT_FOUND) ──────────────────
         if not os.path.exists(file_path):
-            return DiagnosisResult(
+            result = DiagnosisResult(
                 file_path=file_path,
-                operation=operation.value,
+                operation=op_str,
                 diagnosis=DiagnosisType.FILE_NOT_FOUND,
                 reason="The specified file does not exist.",
-                suggested_action=(
-                    "Verify the file path is correct and the file "
-                    "has not been moved or deleted."
-                ),
+                suggested_action="",
+                lock_result=None,
+                permission_result=None,
+                attribute_result=None,
+                sync_result=None,
             )
+            result.suggested_action = self._recommender.recommend(result)
+            return result
 
-        # ── Step 2: Lock detection ──────────────────────────────────
-        lock_result = self._lock_analyzer.analyze(file_path)
+        # ── Step 2: Directory Target Handling ────────────────────────
+        if os.path.isdir(file_path):
+            lock_res = self._safe_analyze_lock(file_path)
+            perm_res = self._safe_analyze_perm(file_path, operation)
+            attr_res = self._safe_analyze_attr(file_path)
+            sync_res = self._safe_analyze_sync(file_path)
 
-        if lock_result.is_locked:
-            reason = self._build_lock_reason(lock_result)
-            return DiagnosisResult(
+            result = DiagnosisResult(
                 file_path=file_path,
-                operation=operation.value,
-                diagnosis=DiagnosisType.FILE_LOCKED,
-                reason=reason,
-                suggested_action=(
-                    "Close the process holding the file and retry."
-                ),
-                lock_result=lock_result,
+                operation=op_str,
+                diagnosis=DiagnosisType.UNKNOWN_ERROR,
+                reason="The specified path is a directory, not a regular file.",
+                suggested_action="",
+                lock_result=lock_res,
+                permission_result=perm_res,
+                attribute_result=attr_res,
+                sync_result=sync_res,
             )
+            result.suggested_action = self._recommender.recommend(result)
+            return result
 
-        # ── Step 3: Permission check ────────────────────────────────
-        perm_result = self._perm_analyzer.analyze(file_path, operation)
+        # ── Step 3: Run All Four Peer Analyzers ──────────────────────
+        lock_res = self._safe_analyze_lock(file_path)
+        perm_res = self._safe_analyze_perm(file_path, operation)
+        attr_res = self._safe_analyze_attr(file_path)
+        sync_res = self._safe_analyze_sync(file_path)
 
-        if not perm_result.permitted:
-            # Distinguish READ_ONLY: the user can read but not write/delete
-            diagnosis_type = self._classify_permission_failure(
-                operation, perm_result,
-            )
-            reason = self._build_permission_reason(
-                operation, diagnosis_type,
-            )
-            suggested_action = self._build_permission_suggestion(
-                diagnosis_type,
-            )
-            return DiagnosisResult(
-                file_path=file_path,
-                operation=operation.value,
-                diagnosis=diagnosis_type,
-                reason=reason,
-                suggested_action=suggested_action,
-                lock_result=lock_result,
-                permission_result=perm_result,
-            )
+        # ── Step 4: Lock Correlation ────────────────────────────────
+        # Correlate lock findings with sync provider findings
+        sync_res = correlate_sync_lock(sync_res, lock_res)
 
-        # ── Step 4: No issues detected ──────────────────────────────
-        return DiagnosisResult(
+        # ── Step 5: Deterministic Priority Classification ───────────
+        diagnosis_type, primary_reason = self._classify(
+            operation, lock_res, perm_res, attr_res, sync_res
+        )
+
+        # ── Step 6: Build Secondary Context ─────────────────────────
+        secondary_notes = []
+        if diagnosis_type != DiagnosisType.SYNC_CONFLICT and sync_res:
+            prov = PROVIDER_DISPLAY_NAMES.get(
+                (sync_res.provider or "").lower(), (sync_res.provider or "cloud sync").capitalize()
+            )
+            if sync_res.evidence_level == "potential_contention":
+                secondary_notes.append(f"Located in {prov} folder with client running")
+            elif sync_res.is_synced:
+                secondary_notes.append(f"Located in {prov} folder")
+
+        if diagnosis_type != DiagnosisType.READ_ONLY and attr_res and attr_res.is_readonly:
+            if operation in (FileOperation.WRITE, FileOperation.DELETE):
+                secondary_notes.append("File also has the read-only attribute set")
+
+        if diagnosis_type not in (DiagnosisType.FILE_LOCKED, DiagnosisType.SYNC_CONFLICT) and lock_res and lock_res.is_locked:
+            secondary_notes.append("File is also locked by an active process")
+
+        if secondary_notes:
+            full_reason = f"{primary_reason} ({'; '.join(secondary_notes)}.)"
+        else:
+            full_reason = primary_reason
+
+        # ── Step 7: Assemble Result and Recommender Guidance ─────────
+        result = DiagnosisResult(
             file_path=file_path,
-            operation=operation.value,
-            diagnosis=DiagnosisType.OPERATION_ALLOWED,
-            reason=(
-                "The requested operation is permitted and "
-                "no lock was detected."
-            ),
+            operation=op_str,
+            diagnosis=diagnosis_type,
+            reason=full_reason,
             suggested_action="",
-            lock_result=lock_result,
-            permission_result=perm_result,
+            lock_result=lock_res,
+            permission_result=perm_res,
+            attribute_result=attr_res,
+            sync_result=sync_res,
+        )
+
+        result.suggested_action = self._recommender.recommend(result)
+        return result
+
+    # ------------------------------------------------------------------
+    # Defensive Analyzer Execution Wrappers
+    # ------------------------------------------------------------------
+
+    def _safe_analyze_lock(self, path: str) -> LockDetectionResult:
+        try:
+            return self._lock_analyzer.analyze(path)
+        except Exception as exc:
+            return LockDetectionResult(
+                file_path=path,
+                is_locked=False,
+                error=f"Lock analysis error: {exc}",
+                detection_method="error",
+            )
+
+    def _safe_analyze_perm(self, path: str, op: FileOperation) -> PermissionCheckResult:
+        try:
+            return self._perm_analyzer.analyze(path, op)
+        except Exception as exc:
+            return PermissionCheckResult(
+                file_path=path,
+                operation=op.value if isinstance(op, FileOperation) else str(op),
+                permitted=False,
+                error=f"Permission analysis error: {exc}",
+                detection_method="error",
+            )
+
+    def _safe_analyze_attr(self, path: str) -> FileAttributeResult:
+        try:
+            return self._attr_analyzer.analyze(path)
+        except Exception as exc:
+            return FileAttributeResult(
+                file_path=path,
+                error=f"Attribute analysis error: {exc}",
+                detection_method="error",
+            )
+
+    def _safe_analyze_sync(self, path: str) -> SyncConflictResult:
+        try:
+            return self._sync_analyzer.analyze(path)
+        except Exception as exc:
+            return SyncConflictResult(
+                file_path=path,
+                error=f"Sync conflict analysis error: {exc}",
+                detection_method="error",
+            )
+
+    # ------------------------------------------------------------------
+    # Priority Decision Logic
+    # ------------------------------------------------------------------
+
+    def _classify(
+        self,
+        operation: FileOperation,
+        lock_res: LockDetectionResult,
+        perm_res: PermissionCheckResult,
+        attr_res: FileAttributeResult,
+        sync_res: SyncConflictResult,
+    ) -> Tuple[DiagnosisType, str]:
+        """Classify primary failure root cause according to deterministic priority."""
+        # 1. Confirmed sync conflict lock (holding process matches OneDrive or Google Drive)
+        if sync_res and sync_res.is_conflict:
+            return DiagnosisType.SYNC_CONFLICT, self._build_sync_conflict_reason(sync_res)
+
+        # 2. Confirmed application process lock (Restart Manager detected active handles)
+        if lock_res and lock_res.is_locked:
+            return DiagnosisType.FILE_LOCKED, self._build_lock_reason(lock_res)
+
+        # 3. Read-only restriction (relevant for WRITE and DELETE)
+        if operation in (FileOperation.WRITE, FileOperation.DELETE):
+            is_ro = False
+            if attr_res and attr_res.is_readonly is True:
+                is_ro = True
+            elif perm_res and not perm_res.permitted and perm_res.detection_method != "error":
+                bits = perm_res.permission_bits or {}
+                if bits.get("read", False) and not bits.get("write", False):
+                    is_ro = True
+
+            if is_ro:
+                reason = (
+                    f"The file is read-only. The current user cannot "
+                    f"{operation.value} this file."
+                )
+                return DiagnosisType.READ_ONLY, reason
+
+        # 4. Critical inspection failures (precede permission denial when inspection was impossible)
+        if perm_res and perm_res.error and perm_res.detection_method == "error":
+            return DiagnosisType.UNKNOWN_ERROR, f"Permission inspection error: {perm_res.error}"
+        if lock_res and lock_res.error and lock_res.detection_method == "error":
+            return DiagnosisType.UNKNOWN_ERROR, f"Lock inspection error: {lock_res.error}"
+
+        # 5. Permission denial (user lacks requested access rights)
+        if perm_res and not perm_res.permitted:
+            return DiagnosisType.PERMISSION_DENIED, self._build_permission_reason(operation, perm_res)
+
+        # 6. No blocking condition detected
+        return (
+            DiagnosisType.OPERATION_ALLOWED,
+            "The requested operation is permitted and no lock was detected.",
         )
 
     # ------------------------------------------------------------------
-    # Private helpers
+    # Reason String Builders
     # ------------------------------------------------------------------
 
     @staticmethod
     def _build_lock_reason(lock_result: LockDetectionResult) -> str:
-        """Build a human-readable reason string from lock results."""
+        """Build human-readable reason string from lock results."""
         if not lock_result.processes:
             return "File is currently locked by another process."
 
@@ -173,57 +320,33 @@ class DiagnosisEngine:
 
         if len(parts) == 1:
             return f"File is currently locked by {parts[0]}."
-        return (
-            "File is currently locked by: "
-            + ", ".join(parts)
-            + "."
-        )
+        return "File is currently locked by: " + ", ".join(parts) + "."
 
     @staticmethod
-    def _classify_permission_failure(
-        operation: FileOperation,
-        perm_result: PermissionCheckResult,
-    ) -> DiagnosisType:
-        """Determine whether a permission failure is READ_ONLY or general.
-
-        READ_ONLY is reported when:
-            - The operation is WRITE or DELETE, AND
-            - The file is readable but not writable.
-        This maps directly to the common "read-only file" scenario.
-        """
-        if operation in (FileOperation.WRITE, FileOperation.DELETE):
-            bits = perm_result.permission_bits
-            if bits.get("read", False) and not bits.get("write", False):
-                return DiagnosisType.READ_ONLY
-        return DiagnosisType.PERMISSION_DENIED
+    def _build_sync_conflict_reason(sync_result: SyncConflictResult) -> str:
+        """Build human-readable reason string from confirmed sync conflict results."""
+        prov = PROVIDER_DISPLAY_NAMES.get(
+            (sync_result.provider or "").lower(), (sync_result.provider or "cloud sync").capitalize()
+        )
+        if sync_result.locking_process:
+            p = sync_result.locking_process
+            name = p.process_name or "(unknown)"
+            return (
+                f"File is locked by {prov} process {name} (PID {p.pid}) "
+                "during active synchronization."
+            )
+        return f"File is currently in conflict with {prov} synchronization."
 
     @staticmethod
     def _build_permission_reason(
         operation: FileOperation,
-        diagnosis_type: DiagnosisType,
+        perm_result: PermissionCheckResult,
     ) -> str:
-        """Build a human-readable reason for a permission failure."""
+        """Build human-readable reason for permission denial."""
         op_label = operation.value.upper()
-
-        if diagnosis_type == DiagnosisType.READ_ONLY:
+        if perm_result.owner:
             return (
-                f"The file is read-only. The current user cannot "
-                f"{operation.value} this file."
+                f"The current user does not have {op_label} permission. "
+                f"File owner: {perm_result.owner}."
             )
-
-        return (
-            f"The current user does not have "
-            f"{op_label} permission."
-        )
-
-    @staticmethod
-    def _build_permission_suggestion(
-        diagnosis_type: DiagnosisType,
-    ) -> str:
-        """Return an actionable suggestion for a permission failure."""
-        if diagnosis_type == DiagnosisType.READ_ONLY:
-            return (
-                "Remove the read-only attribute or adjust the "
-                "file's permissions."
-            )
-        return "Check the file's NTFS permissions or contact an administrator."
+        return f"The current user does not have {op_label} permission."

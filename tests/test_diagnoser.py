@@ -39,10 +39,12 @@ from diagnoser.engine.diagnosis import DiagnosisEngine
 from diagnoser.models import (
     DiagnosisResult,
     DiagnosisType,
+    FileAttributeResult,
     FileOperation,
     LockDetectionResult,
     PermissionCheckResult,
     ProcessInfo,
+    SyncConflictResult,
 )
 
 
@@ -93,13 +95,15 @@ class TestDiagnosisEngineCrossPlatform:
         assert result.operation == "write"
 
     def test_file_not_found_no_lock_or_perm_results(self):
-        """FILE_NOT_FOUND skips lock and permission checks."""
+        """FILE_NOT_FOUND skips all downstream analyzer checks."""
         engine = DiagnosisEngine()
         result = engine.diagnose(
             "/nonexistent/file.txt", FileOperation.READ,
         )
         assert result.lock_result is None
         assert result.permission_result is None
+        assert result.attribute_result is None
+        assert result.sync_result is None
 
     # ------------------------------------------------------------------
     # OPERATION_ALLOWED
@@ -166,8 +170,8 @@ class TestDiagnosisEngineCrossPlatform:
         finally:
             os.unlink(temp_path)
 
-    def test_allowed_has_empty_suggested_action(self):
-        """OPERATION_ALLOWED needs no corrective action."""
+    def test_allowed_has_recommender_action(self):
+        """OPERATION_ALLOWED returns non-empty advisory guidance from Recommender."""
         with tempfile.NamedTemporaryFile(
             delete=False, suffix=".txt"
         ) as f:
@@ -176,7 +180,8 @@ class TestDiagnosisEngineCrossPlatform:
         try:
             engine = DiagnosisEngine()
             result = engine.diagnose(temp_path, FileOperation.READ)
-            assert result.suggested_action == ""
+            assert result.suggested_action != ""
+            assert "permitted" in result.suggested_action.lower() or "no blocking" in result.suggested_action.lower()
         finally:
             os.unlink(temp_path)
 
@@ -498,6 +503,8 @@ class TestDiagnosisEngineCrossPlatform:
         assert hasattr(result, "suggested_action")
         assert hasattr(result, "lock_result")
         assert hasattr(result, "permission_result")
+        assert hasattr(result, "attribute_result")
+        assert hasattr(result, "sync_result")
 
     def test_path_is_normalised(self):
         """The file_path in the result should be absolute and normalised."""
@@ -595,3 +602,452 @@ class TestDiagnosisEngineWindows:
                     break
                 except PermissionError:
                     time.sleep(0.5)
+
+
+# ======================================================================
+# Review 3: Four-Peer Analyzer Integration Tests
+# ======================================================================
+
+class TestDiagnosisEngineIntegrationReview3:
+    """Comprehensive integration tests verifying four-analyzer orchestration,
+    deterministic priority resolution, and Recommender advice.
+    """
+
+    def test_all_four_analyzers_invoked_and_results_attached(self):
+        """All four peer analyzers must be invoked and attached to DiagnosisResult for an existing file."""
+        mock_lock = MagicMock()
+        mock_lock.analyze.return_value = LockDetectionResult(
+            file_path="/test/file.txt", is_locked=False, detection_method="restart_manager"
+        )
+        mock_perm = MagicMock()
+        mock_perm.analyze.return_value = PermissionCheckResult(
+            file_path="/test/file.txt", permitted=True, detection_method="windows_acl"
+        )
+        mock_attr = MagicMock()
+        mock_attr.analyze.return_value = FileAttributeResult(
+            file_path="/test/file.txt", is_readonly=False, detection_method="windows_stat"
+        )
+        mock_sync = MagicMock()
+        mock_sync.analyze.return_value = SyncConflictResult(
+            file_path="/test/file.txt", is_synced=False, evidence_level="none", detection_method="local_sync_detection"
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(
+                lock_analyzer=mock_lock,
+                permission_analyzer=mock_perm,
+                attribute_analyzer=mock_attr,
+                sync_analyzer=mock_sync,
+            )
+
+            result = engine.diagnose(temp_path, FileOperation.READ)
+
+            mock_lock.analyze.assert_called_once()
+            mock_perm.analyze.assert_called_once()
+            mock_attr.analyze.assert_called_once()
+            mock_sync.analyze.assert_called_once()
+
+            assert result.lock_result is not None
+            assert result.permission_result is not None
+            assert result.attribute_result is not None
+            assert result.sync_result is not None
+            assert result.diagnosis == DiagnosisType.OPERATION_ALLOWED
+        finally:
+            os.unlink(temp_path)
+
+    def test_genuine_non_sync_application_lock_returns_file_locked(self):
+        """An ordinary application lock (e.g. notepad.exe) returns FILE_LOCKED,
+        even if the file resides inside a OneDrive sync folder.
+        """
+        mock_lock = MagicMock()
+        mock_lock.analyze.return_value = LockDetectionResult(
+            file_path="/data/file.txt",
+            is_locked=True,
+            processes=[ProcessInfo(process_name="notepad.exe", pid=2468)],
+            detection_method="restart_manager",
+        )
+        mock_sync = MagicMock()
+        mock_sync.analyze.return_value = SyncConflictResult(
+            file_path="/data/file.txt",
+            is_synced=True,
+            provider="onedrive",
+            sync_root="C:\\Users\\User\\OneDrive",
+            client_running=True,
+            evidence_level="potential_contention",
+            is_conflict=False,
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(lock_analyzer=mock_lock, sync_analyzer=mock_sync)
+            result = engine.diagnose(temp_path, FileOperation.WRITE)
+
+            assert result.diagnosis == DiagnosisType.FILE_LOCKED
+            assert "notepad.exe" in result.reason
+            assert "2468" in result.reason
+            assert "OneDrive" in result.reason  # secondary sync evidence preserved!
+            assert result.sync_result.is_conflict is False
+            assert result.sync_result.is_synced is True
+            assert "close" in result.suggested_action.lower()
+        finally:
+            os.unlink(temp_path)
+
+    def test_confirmed_onedrive_lock_returns_sync_conflict(self):
+        """When lock detection confirms OneDrive.exe holds the handle,
+        the primary diagnosis is elevated to SYNC_CONFLICT.
+        """
+        mock_lock = MagicMock()
+        mock_lock.analyze.return_value = LockDetectionResult(
+            file_path="/data/file.txt",
+            is_locked=True,
+            processes=[ProcessInfo(process_name="OneDrive.exe", pid=1020)],
+            detection_method="restart_manager",
+        )
+        mock_sync = MagicMock()
+        mock_sync.analyze.return_value = SyncConflictResult(
+            file_path="/data/file.txt",
+            is_synced=True,
+            provider="onedrive",
+            sync_root="C:\\Users\\User\\OneDrive",
+            client_running=True,
+            evidence_level="potential_contention",
+            is_conflict=False,
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(lock_analyzer=mock_lock, sync_analyzer=mock_sync)
+            result = engine.diagnose(temp_path, FileOperation.WRITE)
+
+            assert result.diagnosis == DiagnosisType.SYNC_CONFLICT
+            assert result.sync_result.is_conflict is True
+            assert result.sync_result.evidence_level == "confirmed_lock"
+            assert result.sync_result.locking_process.process_name == "OneDrive.exe"
+            assert "OneDrive" in result.reason
+            assert "OneDrive" in result.suggested_action
+        finally:
+            os.unlink(temp_path)
+
+    def test_confirmed_google_drive_lock_returns_sync_conflict(self):
+        """When lock detection confirms GoogleDriveFS.exe holds the handle,
+        the primary diagnosis is elevated to SYNC_CONFLICT.
+        """
+        mock_lock = MagicMock()
+        mock_lock.analyze.return_value = LockDetectionResult(
+            file_path="/data/file.txt",
+            is_locked=True,
+            processes=[ProcessInfo(process_name="GoogleDriveFS.exe", pid=3040)],
+            detection_method="restart_manager",
+        )
+        mock_sync = MagicMock()
+        mock_sync.analyze.return_value = SyncConflictResult(
+            file_path="/data/file.txt",
+            is_synced=True,
+            provider="google_drive",
+            sync_root="G:\\",
+            client_running=True,
+            evidence_level="potential_contention",
+            is_conflict=False,
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(lock_analyzer=mock_lock, sync_analyzer=mock_sync)
+            result = engine.diagnose(temp_path, FileOperation.WRITE)
+
+            assert result.diagnosis == DiagnosisType.SYNC_CONFLICT
+            assert result.sync_result.is_conflict is True
+            assert result.sync_result.locking_process.process_name == "GoogleDriveFS.exe"
+            assert "Google drive" in result.reason.lower() or "google drive" in result.reason.lower()
+        finally:
+            os.unlink(temp_path)
+
+    def test_sync_folder_path_only_does_not_falsely_return_sync_conflict(self):
+        """A file inside a sync folder without an active lock must NOT return SYNC_CONFLICT."""
+        mock_lock = MagicMock()
+        mock_lock.analyze.return_value = LockDetectionResult(
+            file_path="/data/file.txt", is_locked=False
+        )
+        mock_sync = MagicMock()
+        mock_sync.analyze.return_value = SyncConflictResult(
+            file_path="/data/file.txt",
+            is_synced=True,
+            provider="onedrive",
+            sync_root="C:\\OneDrive",
+            client_running=False,
+            evidence_level="path_only",
+            is_conflict=False,
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(lock_analyzer=mock_lock, sync_analyzer=mock_sync)
+            result = engine.diagnose(temp_path, FileOperation.READ)
+
+            assert result.diagnosis == DiagnosisType.OPERATION_ALLOWED
+            assert result.sync_result.is_conflict is False
+            assert "OneDrive" in result.reason  # secondary note preserved
+        finally:
+            os.unlink(temp_path)
+
+    def test_readonly_attribute_blocks_write_and_delete(self):
+        """A file marked read-only returns READ_ONLY for WRITE and DELETE."""
+        mock_attr = MagicMock()
+        mock_attr.analyze.return_value = FileAttributeResult(
+            file_path="/test/file.txt", is_readonly=True
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(attribute_analyzer=mock_attr)
+
+            res_write = engine.diagnose(temp_path, FileOperation.WRITE)
+            assert res_write.diagnosis == DiagnosisType.READ_ONLY
+            assert "read-only" in res_write.reason.lower()
+            assert "read-only" in res_write.suggested_action.lower()
+
+            res_delete = engine.diagnose(temp_path, FileOperation.DELETE)
+            assert res_delete.diagnosis == DiagnosisType.READ_ONLY
+        finally:
+            os.unlink(temp_path)
+
+    def test_readonly_attribute_does_not_block_read(self):
+        """A read-only attribute must NOT block READ operations."""
+        mock_attr = MagicMock()
+        mock_attr.analyze.return_value = FileAttributeResult(
+            file_path="/test/file.txt", is_readonly=True
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(attribute_analyzer=mock_attr)
+            result = engine.diagnose(temp_path, FileOperation.READ)
+
+            assert result.diagnosis == DiagnosisType.OPERATION_ALLOWED
+            assert result.attribute_result.is_readonly is True
+        finally:
+            os.unlink(temp_path)
+
+    def test_separate_permission_restriction_returns_permission_denied(self):
+        """A permission denial unrelated to read-only returns PERMISSION_DENIED."""
+        mock_perm = MagicMock()
+        mock_perm.analyze.return_value = PermissionCheckResult(
+            file_path="/test/file.txt",
+            permitted=False,
+            owner="CORP\\Administrator",
+            details="Access Denied by discretionary ACL",
+            permission_bits={"read": False, "write": False},
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(permission_analyzer=mock_perm)
+            result = engine.diagnose(temp_path, FileOperation.READ)
+
+            assert result.diagnosis == DiagnosisType.PERMISSION_DENIED
+            assert "CORP\\Administrator" in result.reason
+            assert "permissions" in result.suggested_action.lower() or "administrator" in result.suggested_action.lower()
+        finally:
+            os.unlink(temp_path)
+
+    def test_multiple_simultaneous_findings_preserve_all_evidence(self):
+        """When lock, read-only, and sync folder coexist, primary is FILE_LOCKED
+        and all secondary findings are preserved in results and reason.
+        """
+        mock_lock = MagicMock()
+        mock_lock.analyze.return_value = LockDetectionResult(
+            file_path="/test/file.txt",
+            is_locked=True,
+            processes=[ProcessInfo(process_name="WINWORD.EXE", pid=7890)],
+        )
+        mock_attr = MagicMock()
+        mock_attr.analyze.return_value = FileAttributeResult(
+            file_path="/test/file.txt", is_readonly=True
+        )
+        mock_sync = MagicMock()
+        mock_sync.analyze.return_value = SyncConflictResult(
+            file_path="/test/file.txt",
+            is_synced=True,
+            provider="onedrive",
+            client_running=True,
+            evidence_level="potential_contention",
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(
+                lock_analyzer=mock_lock,
+                attribute_analyzer=mock_attr,
+                sync_analyzer=mock_sync,
+            )
+            result = engine.diagnose(temp_path, FileOperation.WRITE)
+
+            # Primary diagnosis must remain FILE_LOCKED
+            assert result.diagnosis == DiagnosisType.FILE_LOCKED
+            assert "WINWORD.EXE" in result.reason
+
+            # All secondary findings must be preserved
+            assert result.attribute_result.is_readonly is True
+            assert result.sync_result.is_synced is True
+            assert "read-only" in result.reason.lower()
+            assert "onedrive" in result.reason.lower()
+        finally:
+            os.unlink(temp_path)
+
+    def test_analyzer_exception_isolated_and_converted_to_error_result(self):
+        """An unhandled exception in one analyzer does not abort other analyzers."""
+        mock_lock = MagicMock()
+        mock_lock.analyze.side_effect = RuntimeError("Kernel handle table corrupted")
+
+        mock_perm = MagicMock()
+        mock_perm.analyze.return_value = PermissionCheckResult(
+            file_path="/test/file.txt", permitted=True
+        )
+
+        mock_attr = MagicMock()
+        mock_attr.analyze.return_value = FileAttributeResult(
+            file_path="/test/file.txt", is_readonly=False
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(
+                lock_analyzer=mock_lock,
+                permission_analyzer=mock_perm,
+                attribute_analyzer=mock_attr,
+            )
+            result = engine.diagnose(temp_path, FileOperation.READ)
+
+            assert result.lock_result.detection_method == "error"
+            assert "Lock analysis error" in result.lock_result.error
+            assert result.permission_result.permitted is True
+            assert result.attribute_result is not None
+            assert result.sync_result is not None
+        finally:
+            os.unlink(temp_path)
+
+    def test_critical_analyzer_error_represented_honestly(self):
+        """When an analyzer reports critical inspection error, it is not fabricated into success."""
+        mock_perm = MagicMock()
+        mock_perm.analyze.return_value = PermissionCheckResult(
+            file_path="/test/file.txt",
+            permitted=False,
+            error="System error reading security descriptor",
+            detection_method="error",
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(permission_analyzer=mock_perm)
+            result = engine.diagnose(temp_path, FileOperation.READ)
+
+            assert result.diagnosis == DiagnosisType.UNKNOWN_ERROR
+            assert "Permission inspection error" in result.reason
+        finally:
+            os.unlink(temp_path)
+
+    def test_recommender_integrated_and_called_consistently(self):
+        """Recommender is invoked with the completed DiagnosisResult."""
+        mock_recommender = MagicMock()
+        mock_recommender.recommend.return_value = "Custom verified advisory guidance"
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(recommender=mock_recommender)
+            result = engine.diagnose(temp_path, FileOperation.READ)
+
+            mock_recommender.recommend.assert_called_once()
+            assert result.suggested_action == "Custom verified advisory guidance"
+        finally:
+            os.unlink(temp_path)
+
+    def test_injected_analyzers_used_exactly(self):
+        """Custom injected instances are used rather than default constructors."""
+        m_lock = MagicMock()
+        m_perm = MagicMock()
+        m_attr = MagicMock()
+        m_sync = MagicMock()
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(
+                lock_analyzer=m_lock,
+                permission_analyzer=m_perm,
+                attribute_analyzer=m_attr,
+                sync_analyzer=m_sync,
+            )
+            engine.diagnose(temp_path, FileOperation.READ)
+
+            assert m_lock.analyze.call_count == 1
+            assert m_perm.analyze.call_count == 1
+            assert m_attr.analyze.call_count == 1
+            assert m_sync.analyze.call_count == 1
+        finally:
+            os.unlink(temp_path)
+
+    def test_directory_target_handling(self):
+        """When a directory is diagnosed, all 4 results are attached and diagnosis is UNKNOWN_ERROR."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            engine = DiagnosisEngine()
+            result = engine.diagnose(temp_dir, FileOperation.WRITE)
+
+            assert result.diagnosis == DiagnosisType.UNKNOWN_ERROR
+            assert "directory" in result.reason.lower()
+            assert result.lock_result is not None
+            assert result.permission_result is not None
+            assert result.attribute_result is not None
+            assert result.sync_result is not None
+            assert result.suggested_action != ""
+
+    def test_nonexistent_file_skips_downstream_checks(self):
+        """FILE_NOT_FOUND skips running the peer analyzers."""
+        m_lock = MagicMock()
+        m_perm = MagicMock()
+        m_attr = MagicMock()
+        m_sync = MagicMock()
+
+        engine = DiagnosisEngine(
+            lock_analyzer=m_lock,
+            permission_analyzer=m_perm,
+            attribute_analyzer=m_attr,
+            sync_analyzer=m_sync,
+        )
+
+        result = engine.diagnose("/nonexistent/file/path/xyz.txt", FileOperation.READ)
+
+        assert result.diagnosis == DiagnosisType.FILE_NOT_FOUND
+        assert m_lock.analyze.call_count == 0
+        assert m_perm.analyze.call_count == 0
+        assert m_attr.analyze.call_count == 0
+        assert m_sync.analyze.call_count == 0
+        assert result.lock_result is None
+        assert result.permission_result is None
+        assert result.attribute_result is None
+        assert result.sync_result is None

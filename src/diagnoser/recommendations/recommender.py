@@ -160,7 +160,13 @@ class Recommender:
         sync_res: Optional[SyncConflictResult],
         lock_res: Optional[LockDetectionResult],
     ) -> str:
-        provider = (sync_res.provider if sync_res and sync_res.provider else "cloud sync").capitalize()
+        raw_prov = (sync_res.provider if sync_res and sync_res.provider else "cloud sync").lower()
+        if raw_prov == "onedrive":
+            provider = "OneDrive"
+        elif raw_prov == "google_drive":
+            provider = "Google Drive"
+        else:
+            provider = raw_prov.capitalize()
 
         # If a lock was confirmed by lock analysis or sync result
         if (sync_res and sync_res.is_conflict) or (lock_res and lock_res.is_locked):
