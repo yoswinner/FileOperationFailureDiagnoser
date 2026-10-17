@@ -12,10 +12,12 @@ from diagnoser.models import (
     AnalyzerResult,
     DiagnosisResult,
     DiagnosisType,
+    FileAttributeResult,
     FileOperation,
     LockDetectionResult,
     PermissionCheckResult,
     ProcessInfo,
+    SyncConflictResult,
 )
 
 
@@ -177,9 +179,10 @@ class TestDiagnosisType:
         assert DiagnosisType.READ_ONLY.value == "read_only"
         assert DiagnosisType.OPERATION_ALLOWED.value == "operation_allowed"
         assert DiagnosisType.UNKNOWN_ERROR.value == "unknown_error"
+        assert DiagnosisType.SYNC_CONFLICT.value == "sync_conflict"
 
     def test_enum_membership(self):
-        assert len(DiagnosisType) == 6
+        assert len(DiagnosisType) == 7
 
 
 class TestDiagnosisResult:
@@ -194,8 +197,22 @@ class TestDiagnosisResult:
         assert result.suggested_action == ""
         assert result.lock_result is None
         assert result.permission_result is None
+        assert result.attribute_result is None
+        assert result.sync_result is None
 
     def test_populated_result(self):
+        attr_res = FileAttributeResult(
+            file_path=r"C:\test.txt",
+            is_readonly=True,
+            attributes_list=["READONLY"],
+            detection_method="windows_stat",
+        )
+        sync_res = SyncConflictResult(
+            file_path=r"C:\test.txt",
+            is_synced=True,
+            provider="onedrive",
+            detection_method="local_sync_detection",
+        )
         result = DiagnosisResult(
             file_path=r"C:\test.txt",
             operation="write",
@@ -208,8 +225,97 @@ class TestDiagnosisResult:
                 processes=[ProcessInfo(process_name="notepad.exe", pid=1234)],
                 detection_method="restart_manager",
             ),
+            attribute_result=attr_res,
+            sync_result=sync_res,
         )
         assert result.diagnosis == DiagnosisType.FILE_LOCKED
         assert result.lock_result is not None
         assert result.lock_result.is_locked is True
         assert result.permission_result is None
+        assert result.attribute_result is attr_res
+        assert result.attribute_result.is_readonly is True
+        assert result.sync_result is sync_res
+        assert result.sync_result.provider == "onedrive"
+
+
+class TestFileAttributeResult:
+    """Tests for the FileAttributeResult dataclass."""
+
+    def test_defaults(self):
+        result = FileAttributeResult(file_path="/some/file.txt")
+        assert result.file_path == "/some/file.txt"
+        assert result.is_readonly is None
+        assert result.is_hidden is None
+        assert result.is_system is None
+        assert result.is_archive is None
+        assert result.is_reparse_point is None
+        assert result.is_offline is None
+        assert result.raw_attributes is None
+        assert result.attributes_list == []
+        assert result.error is None
+        assert result.detection_method == ""
+
+    def test_populated_result(self):
+        result = FileAttributeResult(
+            file_path=r"C:\test.txt",
+            is_readonly=True,
+            is_hidden=False,
+            is_system=False,
+            is_archive=True,
+            is_reparse_point=False,
+            is_offline=False,
+            raw_attributes=0x21,
+            attributes_list=["READONLY", "ARCHIVE"],
+            detection_method="windows_stat",
+        )
+        assert result.is_readonly is True
+        assert result.is_archive is True
+        assert result.raw_attributes == 0x21
+        assert "READONLY" in result.attributes_list
+        assert result.detection_method == "windows_stat"
+
+    def test_attributes_list_independent_across_instances(self):
+        r1 = FileAttributeResult(file_path="a.txt")
+        r2 = FileAttributeResult(file_path="b.txt")
+        r1.attributes_list.append("READONLY")
+        assert len(r2.attributes_list) == 0
+
+
+class TestSyncConflictResult:
+    """Tests for the SyncConflictResult dataclass."""
+
+    def test_defaults(self):
+        result = SyncConflictResult(file_path="/some/file.txt")
+        assert result.file_path == "/some/file.txt"
+        assert result.is_synced is None
+        assert result.provider == ""
+        assert result.sync_root == ""
+        assert result.client_running is False
+        assert result.evidence_level == "none"
+        assert result.is_conflict is False
+        assert result.locking_process is None
+        assert result.details == ""
+        assert result.error is None
+        assert result.detection_method == ""
+
+    def test_populated_result(self):
+        proc = ProcessInfo(process_name="OneDrive.exe", pid=9876)
+        result = SyncConflictResult(
+            file_path=r"C:\Users\test\OneDrive\doc.txt",
+            is_synced=True,
+            provider="onedrive",
+            sync_root=r"C:\Users\test\OneDrive",
+            client_running=True,
+            evidence_level="confirmed_lock",
+            is_conflict=True,
+            locking_process=proc,
+            details="OneDrive holds an active file lock.",
+            detection_method="local_sync_detection",
+        )
+        assert result.is_synced is True
+        assert result.provider == "onedrive"
+        assert result.client_running is True
+        assert result.is_conflict is True
+        assert result.locking_process is not None
+        assert result.locking_process.pid == 9876
+        assert result.evidence_level == "confirmed_lock"

@@ -109,6 +109,96 @@ class PermissionCheckResult:
 
 
 # ======================================================================
+# File Attribute models (Review 3 - Milestone 5)
+# ======================================================================
+
+@dataclass
+class FileAttributeResult:
+    """Result of a file-attribute analysis.
+
+    This is the structured output from the FileAttributeAnalyzer.
+
+    Attributes:
+        file_path: The absolute path of the file that was analysed.
+        is_readonly: True if the read-only attribute is set; False if not;
+                     None if undetermined or unsupported on this platform.
+        is_hidden: True if the hidden attribute is set; False if not;
+                   None if undetermined or unsupported on this platform.
+        is_system: True if marked as a system file; False if not;
+                   None if undetermined or unsupported on this platform.
+        is_archive: True if the archive attribute is set; False if not;
+                    None if undetermined or unsupported on this platform.
+        is_reparse_point: True if the file is a reparse point (e.g. symlink,
+                          junction, or cloud placeholder); False if not;
+                          None if undetermined or unsupported on this platform.
+        is_offline: True if the file data is not immediately available locally
+                    (e.g. cloud placeholder / HSM); False if not;
+                    None if undetermined or unsupported on this platform.
+        raw_attributes: The raw integer bitmask of attributes, if available.
+        attributes_list: List of human-readable attribute names detected
+                         (e.g. ['READONLY', 'ARCHIVE']).
+        error: A human-readable error message if something went wrong
+               during detection. None if detection completed without errors.
+        detection_method: Method used ('windows_stat', 'windows_api',
+                          'posix_stat', 'unsupported_platform', or 'error').
+    """
+    file_path: str
+    is_readonly: Optional[bool] = None
+    is_hidden: Optional[bool] = None
+    is_system: Optional[bool] = None
+    is_archive: Optional[bool] = None
+    is_reparse_point: Optional[bool] = None
+    is_offline: Optional[bool] = None
+    raw_attributes: Optional[int] = None
+    attributes_list: List[str] = field(default_factory=list)
+    error: Optional[str] = None
+    detection_method: str = ""
+
+
+# ======================================================================
+# Cloud-Sync models (Review 3 - Milestone 6)
+# ======================================================================
+
+@dataclass
+class SyncConflictResult:
+    """Result of a cloud-synchronisation conflict analysis.
+
+    Designed for OneDrive and Google Drive local client detection.
+
+    Attributes:
+        file_path: The absolute path of the file that was analysed.
+        is_synced: True if the file resides inside a detected cloud-sync folder;
+                   False if not; None if undetermined.
+        provider: Name of the cloud provider ('onedrive', 'google_drive',
+                  or '' if none).
+        sync_root: The root local directory of the sync provider.
+        client_running: True if the provider's local background process
+                        (e.g. OneDrive.exe, GoogleDriveFS.exe) is currently running.
+        evidence_level: Level of confidence ('none', 'path_only',
+                        'potential_contention', 'confirmed_lock').
+        is_conflict: True if there is evidence of an active synchronization
+                     lock or conflict affecting the file.
+        locking_process: ProcessInfo of the sync process holding the file lock,
+                         if confirmed by lock analysis.
+        details: Human-readable explanation of sync status and evidence.
+        error: Human-readable error message if detection encountered an issue.
+        detection_method: Method used ('local_sync_detection',
+                          'unsupported_platform', or 'error').
+    """
+    file_path: str
+    is_synced: Optional[bool] = None
+    provider: str = ""
+    sync_root: str = ""
+    client_running: bool = False
+    evidence_level: str = "none"
+    is_conflict: bool = False
+    locking_process: Optional[ProcessInfo] = None
+    details: str = ""
+    error: Optional[str] = None
+    detection_method: str = ""
+
+
+# ======================================================================
 # Diagnosis Engine models (Milestone 3)
 # ======================================================================
 
@@ -124,6 +214,7 @@ class DiagnosisType(Enum):
     READ_ONLY = "read_only"
     OPERATION_ALLOWED = "operation_allowed"
     UNKNOWN_ERROR = "unknown_error"
+    SYNC_CONFLICT = "sync_conflict"
 
 
 @dataclass
@@ -143,6 +234,10 @@ class DiagnosisResult:
                      was performed.  None otherwise.
         permission_result: The raw PermissionCheckResult, if a
                            permission check was performed.  None otherwise.
+        attribute_result: The raw FileAttributeResult, if an attribute check
+                          was performed.  None otherwise.
+        sync_result: The raw SyncConflictResult, if a sync check
+                     was performed.  None otherwise.
     """
     file_path: str
     operation: str = ""
@@ -151,6 +246,8 @@ class DiagnosisResult:
     suggested_action: str = ""
     lock_result: Optional[LockDetectionResult] = None
     permission_result: Optional[PermissionCheckResult] = None
+    attribute_result: Optional[FileAttributeResult] = None
+    sync_result: Optional[SyncConflictResult] = None
 
 
 # ======================================================================
