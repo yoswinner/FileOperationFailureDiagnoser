@@ -465,9 +465,9 @@ class MainWindow:
         info = ttk.Frame(card, style="Card.TFrame")
         info.pack(fill="x")
 
-        self._status_file_lbl = self._kv_row(info, "File:", "—", label_width=14, wraplength=760)
-        self._status_op_lbl = self._kv_row(info, "Operation:", "—", label_width=14, wraplength=760)
-        self._status_reason_lbl = self._kv_row(info, "Reason:", "Select a file and operation, then click Diagnose File.", label_width=14, wraplength=760)
+        self._status_file_lbl = self._kv_row(info, "File:", "—", label_width=14, wraplength=700)
+        self._status_op_lbl = self._kv_row(info, "Operation:", "—", label_width=14, wraplength=700)
+        self._status_reason_lbl = self._kv_row(info, "Reason:", "Select a file and operation, then click Diagnose File.", label_width=14, wraplength=700)
 
     # ── Details Row 1 (Process List + Permissions) ──────────────────
 
@@ -523,9 +523,9 @@ class MainWindow:
         card = ttk.Frame(frame, style="Card.TFrame", padding=12)
         card.pack(fill="both", expand=True)
 
-        self._perm_owner_lbl = self._kv_row(card, "Owner:", "—", label_width=14, wraplength=320)
-        self._perm_user_lbl = self._kv_row(card, "Current User:", "—", label_width=14, wraplength=320)
-        self._perm_method_lbl = self._kv_row(card, "Detection:", "—", label_width=14, wraplength=320)
+        self._perm_owner_lbl = self._kv_row(card, "Owner:", "—", label_width=14, wraplength=280)
+        self._perm_user_lbl = self._kv_row(card, "Current User:", "—", label_width=14, wraplength=280)
+        self._perm_method_lbl = self._kv_row(card, "Detection:", "—", label_width=14, wraplength=280)
 
         sep = ttk.Frame(card, style="Card.TFrame", height=1)
         sep.pack(fill="x", pady=(6, 6))
@@ -562,9 +562,9 @@ class MainWindow:
         card = ttk.Frame(frame, style="Card.TFrame", padding=12)
         card.pack(fill="both", expand=True)
 
-        self._attr_raw_lbl = self._kv_row(card, "Raw Bitmask:", "—", label_width=14, wraplength=320)
-        self._attr_method_lbl = self._kv_row(card, "Detection:", "—", label_width=14, wraplength=320)
-        self._attr_effect_lbl = self._kv_row(card, "Effect on Op:", "—", label_width=14, wraplength=320)
+        self._attr_raw_lbl = self._kv_row(card, "Raw Bitmask:", "—", label_width=14, wraplength=280)
+        self._attr_method_lbl = self._kv_row(card, "Detection:", "—", label_width=14, wraplength=280)
+        self._attr_effect_lbl = self._kv_row(card, "Effect on Op:", "—", label_width=14, wraplength=280)
 
         sep = ttk.Frame(card, style="Card.TFrame", height=1)
         sep.pack(fill="x", pady=(6, 6))
@@ -590,11 +590,11 @@ class MainWindow:
         card = ttk.Frame(frame, style="Card.TFrame", padding=12)
         card.pack(fill="both", expand=True)
 
-        self._sync_provider_lbl = self._kv_row(card, "Provider:", "—", label_width=15, wraplength=310)
-        self._sync_root_lbl = self._kv_row(card, "Sync Root:", "—", label_width=15, wraplength=310)
-        self._sync_client_lbl = self._kv_row(card, "Client Daemon:", "—", label_width=15, wraplength=310)
-        self._sync_evidence_lbl = self._kv_row(card, "Evidence Level:", "—", label_width=15, wraplength=310)
-        self._sync_details_lbl = self._kv_row(card, "Details:", "—", label_width=15, wraplength=310)
+        self._sync_provider_lbl = self._kv_row(card, "Provider:", "—", label_width=15, wraplength=275)
+        self._sync_root_lbl = self._kv_row(card, "Sync Root:", "—", label_width=15, wraplength=275)
+        self._sync_client_lbl = self._kv_row(card, "Client Daemon:", "—", label_width=15, wraplength=275)
+        self._sync_evidence_lbl = self._kv_row(card, "Evidence Level:", "—", label_width=15, wraplength=275)
+        self._sync_details_lbl = self._kv_row(card, "Details:", "—", label_width=15, wraplength=275)
 
         self._sync_placeholder = ttk.Label(
             card,
@@ -620,16 +620,22 @@ class MainWindow:
             card,
             text="No recommendation available.",
             style="Card.TLabel",
-            wraplength=860,
+            wraplength=720,
         )
         self._rec_label.pack(anchor="w")
+
+        def _adjust_rec_wrap(event):
+            avail = event.width - 40
+            if avail > 150:
+                self._rec_label.configure(wraplength=avail)
+        card.bind("<Configure>", _adjust_rec_wrap, add="+")
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _kv_row(parent, label_text, value_text, label_width=14, wraplength=420):
+    def _kv_row(parent, label_text, value_text, label_width=14, wraplength=280):
         """Create a 'Key: Value' row with top alignment and return the value label."""
         row = ttk.Frame(parent, style="Card.TFrame")
         row.pack(fill="x", pady=2)
@@ -647,6 +653,13 @@ class MainWindow:
             font=("Segoe UI", 9),
         )
         val.pack(side="left", fill="x", expand=True, anchor="nw")
+
+        def _adjust_wrap(event):
+            avail = event.width - (label_width * 8) - 30
+            if avail > 100:
+                val.configure(wraplength=avail)
+        parent.bind("<Configure>", _adjust_wrap, add="+")
+
         return val
 
     # ------------------------------------------------------------------

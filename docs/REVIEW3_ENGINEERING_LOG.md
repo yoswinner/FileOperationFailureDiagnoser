@@ -438,3 +438,34 @@ Window captures were performed via zero-dependency native Win32/GDI+ capture API
      - Packaged `Review3_Evidence_Pack_v3.zip` including `project_docs/README.md` (root README copy), `final_screenshots_v3/`, verified logs, fixtures, scripts, and demo guides. Passed zipfile integrity testing.
 - **Tests**: 157 collected, 156 passed, 0 failed, 1 skipped on Windows 11 Pro 64-bit (`Python 3.13.14`, `pytest 9.1.1`).
 - **Commit Target**: `docs: polish final Review 3 evidence and demonstration kit`.
+
+### Guide Layout Landscape Sizing, GUI Text Wrapping and README Accuracy Polish
+- **Files**:
+  - `src/diagnoser/gui/main_window.py`
+  - `scripts/build_review3_demo_guide.py`
+  - `scripts/capture_review3_evidence.py`
+  - `artifacts/review3/Review3_Demo_Guide.docx`
+  - `artifacts/review3/Review3_Demo_Guide.pdf`
+  - `artifacts/review3/Review3_Demo_Guide.md`
+  - `README.md`
+  - `artifacts/review3/README_FOR_CLAUDE.md`
+  - `artifacts/review3/Review3_Evidence_Pack_v4.zip`
+- **Technical & Presentation Corrections**:
+  1. **Landscape Demonstration Guide & Zero Horizontal Image Cropping**:
+     - *Issue Identified*: In Word/PDF demonstration guides, 936px GUI window screenshots exported via Word COM exceeded printable portrait margins, clipping the right-hand evidence panels (File Attributes, Cloud Synchronization, Permissions, Recommender). Furthermore, checklist tables in Section 5 rendered too narrowly in alternative document viewers due to unconstrained table widths.
+     - *Correction*: Re-engineered `build_review3_demo_guide.py`:
+       - Switched document orientation to Landscape (`@page { size: landscape; margin: 0.45in 0.5in; }` and Word COM `$doc.PageSetup.Orientation = 1`).
+       - Explicitly constrained screenshot images to `width="330" height="310"` preserving exact natural aspect ratio (`879 / 936 = 0.939`).
+       - Programmatically constrained all Word COM `InlineShapes` in tables to `Width = 330` and `Height = 310`.
+       - Implemented `$t.AutoFitBehavior(2)` (wdAutoFitWindow) and explicit `<colgroup>` percentage column widths (`50% / 50%` for screenshot pair tables, `8% / 24% / 36% / 32%` for checklist tables).
+       - Successfully reduced document size to **20 clean, legible landscape pages** with zero off-page figures and complete visibility of both upper and lower viewports.
+  2. **Conservative Default Wraplength & Dynamic Layout Calculation**:
+     - *Issue Identified*: Labels in 2-column cards (DACL disclaimer, attribute effects, cloud sync paths) and recommendation card risk clipping on non-standard DPI scaling or narrower resolutions when fixed wraplength equals card width.
+     - *Correction*: Configured conservative initial defaults in `main_window.py` (`wraplength=280` for 2-column cards, `700` for status labels, `720` for recommendations) and attached responsive `<Configure>` event handlers that dynamically recalculate available wrapping width from parent frames.
+  3. **README Technical Accuracy & Wording Corrections**:
+     - Replaced statements claiming analyzers operate "concurrently" with "independent peer analyzers coordinated sequentially in one unified diagnosis pass".
+     - Described `os.access()` accurately: clarified that Python OS access checks test basic user rights and read-only flags without evaluating recursive NTFS DACL inheritance trees or directory-level deletion permissions.
+     - Added explicit documentation of normal file WRITE success (`OPERATION_ALLOWED`) on `01_normal_file.txt`.
+     - Preserved all historical evidence ZIPs (`Review3_Evidence_Pack_v3.zip`, `Review3_Evidence_Pack_v2.zip`, `Review3_Evidence_Pack.zip`) and packaged `Review3_Evidence_Pack_v4.zip` including root `README.md`.
+- **Tests**: 157 collected, 156 passed, 0 failed, 1 skipped on Windows 11 Pro 64-bit (`Python 3.13.14`, `pytest 9.1.1`).
+- **Commit Target**: `docs: fix demo guide layout and refine technical documentation`.

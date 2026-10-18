@@ -49,15 +49,19 @@ def build_html_content() -> str:
             top_uri = top_path.replace("\\", "/")
             bottom_uri = bottom_path.replace("\\", "/")
             return f"""
-            <table class="screenshot-pair-table">
+            <table class="screenshot-pair-table" style="width: 100%; table-layout: fixed; border-collapse: collapse; margin: 8px 0 14px 0;">
+                <colgroup>
+                    <col style="width: 50%;">
+                    <col style="width: 50%;">
+                </colgroup>
                 <tr>
-                    <td class="screenshot-cell">
-                        <img src="{top_uri}" alt="{caption} - Upper Viewport" class="pair-screenshot" />
+                    <td class="screenshot-cell" style="width: 50%; vertical-align: top; padding: 4px 8px; text-align: center;">
+                        <img src="{top_uri}" alt="{caption} - Upper Viewport" class="pair-screenshot" width="330" height="310" style="width: 330px; height: 310px; max-width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; display: block; margin: 0 auto;" />
                         <p class="pair-caption"><strong>Upper Viewport:</strong> Controls, Status & Process Locks</p>
                     </td>
-                    <td class="screenshot-cell">
-                        <img src="{bottom_uri}" alt="{caption} - Lower Viewport" class="pair-screenshot" />
-                        <p class="pair-caption"><strong>Lower Viewport:</strong> Attributes, Sync & Recommendation</p>
+                    <td class="screenshot-cell" style="width: 50%; vertical-align: top; padding: 4px 8px; text-align: center;">
+                        <img src="{bottom_uri}" alt="{caption} - Lower Viewport" class="pair-screenshot" width="330" height="310" style="width: 330px; height: 310px; max-width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; display: block; margin: 0 auto;" />
+                        <p class="pair-caption"><strong>Lower Viewport:</strong> Attributes, Sync, Permissions & Recommendation</p>
                     </td>
                 </tr>
             </table>
@@ -66,7 +70,7 @@ def build_html_content() -> str:
         full_path = os.path.join(_SCREENSHOTS_DIR, filename).replace("\\", "/")
         return f"""
         <div class="figure-container">
-            <img src="{full_path}" alt="{caption}" class="screenshot" />
+            <img src="{full_path}" alt="{caption}" class="screenshot" width="500" style="width: 500px; max-width: 95%; height: auto;" />
             <p class="caption"><strong>Figure:</strong> {caption}</p>
         </div>
         """
@@ -77,33 +81,37 @@ def build_html_content() -> str:
 <meta charset="utf-8" />
 <title>File Operation Failure Diagnoser — Review 3 Demonstration Guide</title>
 <style>
+    @page {{
+        size: landscape;
+        margin: 0.45in 0.5in;
+    }}
     body {{
         font-family: 'Segoe UI', Calibri, Arial, sans-serif;
         color: #1e293b;
-        line-height: 1.5;
-        margin: 40px;
+        line-height: 1.45;
+        margin: 20px 30px;
     }}
     h1.doc-title {{
-        font-size: 26pt;
+        font-size: 24pt;
         color: #0f172a;
         margin-bottom: 4px;
         font-weight: 700;
     }}
     p.doc-subtitle {{
-        font-size: 14pt;
+        font-size: 13pt;
         color: #475569;
         margin-top: 0;
-        margin-bottom: 24px;
+        margin-bottom: 20px;
         border-bottom: 2px solid #cbd5e1;
-        padding-bottom: 12px;
+        padding-bottom: 10px;
     }}
     .meta-box {{
         background-color: #f8fafc;
         border: 1px solid #e2e8f0;
         border-left: 4px solid #3b82f6;
-        padding: 12px 16px;
-        margin-bottom: 28px;
-        font-size: 10pt;
+        padding: 10px 14px;
+        margin-bottom: 22px;
+        font-size: 9.5pt;
     }}
     .meta-box table {{
         width: 100%;
@@ -114,47 +122,48 @@ def build_html_content() -> str:
         vertical-align: top;
     }}
     h2 {{
-        font-size: 17pt;
+        font-size: 16pt;
         color: #0f172a;
         border-bottom: 1px solid #e2e8f0;
         padding-bottom: 6px;
-        margin-top: 32px;
-        margin-bottom: 12px;
+        margin-top: 28px;
+        margin-bottom: 10px;
     }}
     h3 {{
-        font-size: 13pt;
+        font-size: 12.5pt;
         color: #2563eb;
-        margin-top: 24px;
-        margin-bottom: 8px;
+        margin-top: 20px;
+        margin-bottom: 6px;
     }}
     p, li {{
-        font-size: 10.5pt;
+        font-size: 10pt;
         color: #334155;
     }}
     ul {{
-        margin-top: 6px;
-        margin-bottom: 12px;
-        padding-left: 24px;
+        margin-top: 4px;
+        margin-bottom: 10px;
+        padding-left: 20px;
     }}
     li {{
-        margin-bottom: 4px;
+        margin-bottom: 3px;
     }}
     table.data-table {{
         width: 100%;
+        table-layout: fixed;
         border-collapse: collapse;
-        margin: 16px 0;
-        font-size: 9.5pt;
+        margin: 12px 0;
+        font-size: 9pt;
     }}
     table.data-table th {{
         background-color: #f1f5f9;
         color: #0f172a;
         font-weight: 600;
         text-align: left;
-        padding: 8px 10px;
+        padding: 7px 10px;
         border: 1px solid #cbd5e1;
     }}
     table.data-table td {{
-        padding: 8px 10px;
+        padding: 7px 10px;
         border: 1px solid #cbd5e1;
         vertical-align: top;
     }}
@@ -164,32 +173,32 @@ def build_html_content() -> str:
     .callout {{
         background-color: #eff6ff;
         border-left: 4px solid #2563eb;
-        padding: 10px 14px;
-        margin: 12px 0;
-        font-size: 10pt;
+        padding: 8px 12px;
+        margin: 10px 0;
+        font-size: 9.5pt;
     }}
     .callout-title {{
         font-weight: bold;
         color: #1e40af;
-        margin-bottom: 4px;
+        margin-bottom: 3px;
     }}
     table.screenshot-pair-table {{
         width: 100%;
         border-collapse: collapse;
-        margin: 8px 0 14px 0;
+        margin: 6px 0 12px 0;
         table-layout: fixed;
         page-break-inside: avoid;
     }}
     td.screenshot-cell {{
         width: 50%;
         vertical-align: top;
-        padding: 4px 6px;
+        padding: 2px 6px;
         border: none;
         text-align: center;
     }}
     img.pair-screenshot {{
-        width: 100%;
-        max-width: 330px;
+        width: 330px;
+        max-width: 100%;
         height: auto;
         border: 1px solid #cbd5e1;
         border-radius: 4px;
@@ -207,11 +216,11 @@ def build_html_content() -> str:
     }}
     .figure-container {{
         text-align: center;
-        margin: 12px 0 18px 0;
+        margin: 10px 0 16px 0;
         page-break-inside: avoid;
     }}
     img.screenshot {{
-        width: 480px;
+        width: 500px;
         max-width: 95%;
         height: auto;
         border: 1px solid #cbd5e1;
@@ -271,12 +280,17 @@ The <strong>File Operation Failure Diagnoser</strong> is an automated, non-invas
 </p>
 
 <h3>The Four Peer Analyzers</h3>
-<table class="data-table">
+<table class="data-table" style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+    <colgroup>
+        <col style="width: 25%;">
+        <col style="width: 35%;">
+        <col style="width: 40%;">
+    </colgroup>
     <thead>
         <tr>
-            <th>Analyzer Subsystem</th>
-            <th>Underlying Windows API / OS Mechanism</th>
-            <th>Primary Telemetry Captured</th>
+            <th style="width: 25%;">Analyzer Subsystem</th>
+            <th style="width: 35%;">Underlying Windows API / OS Mechanism</th>
+            <th style="width: 40%;">Primary Telemetry Captured</th>
         </tr>
     </thead>
     <tbody>
@@ -469,13 +483,19 @@ The <strong>File Operation Failure Diagnoser</strong> is an automated, non-invas
 </ul>
 
 <h2>5. Ready-to-Use Presentation Checklist</h2>
-<table class="data-table">
+<table class="data-table" style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+    <colgroup>
+        <col style="width: 8%;">
+        <col style="width: 24%;">
+        <col style="width: 36%;">
+        <col style="width: 32%;">
+    </colgroup>
     <thead>
         <tr>
-            <th>Step</th>
-            <th>Action</th>
-            <th>Command / Fixture</th>
-            <th>Verification Check</th>
+            <th style="width: 8%;">Step</th>
+            <th style="width: 24%;">Action</th>
+            <th style="width: 36%;">Command / Fixture</th>
+            <th style="width: 32%;">Verification Check</th>
         </tr>
     </thead>
     <tbody>
@@ -576,16 +596,20 @@ try {{
 
     $doc = $word.Documents.Open($htmlPath)
 
-    # Set page margins to 0.6 inch to optimize layout
-    $doc.PageSetup.TopMargin = $word.InchesToPoints(0.6)
-    $doc.PageSetup.BottomMargin = $word.InchesToPoints(0.6)
-    $doc.PageSetup.LeftMargin = $word.InchesToPoints(0.6)
-    $doc.PageSetup.RightMargin = $word.InchesToPoints(0.6)
+    # Set page orientation to Landscape for maximum screenshot legibility and side-by-side fit
+    $doc.PageSetup.Orientation = 1  # 1 = wdOrientLandscape
+    $doc.PageSetup.TopMargin = $word.InchesToPoints(0.45)
+    $doc.PageSetup.BottomMargin = $word.InchesToPoints(0.45)
+    $doc.PageSetup.LeftMargin = $word.InchesToPoints(0.5)
+    $doc.PageSetup.RightMargin = $word.InchesToPoints(0.5)
 
-    # Ensure table rows never split across page breaks
+    # Ensure table rows never split across page breaks and tables span full window
     foreach ($t in $doc.Tables) {{
         try {{
             $t.Rows.AllowBreakAcrossPages = 0
+            $t.AutoFitBehavior(2)  # 2 = wdAutoFitWindow
+            $t.PreferredWidthType = 3  # 3 = wdPreferredWidthPercent
+            $t.PreferredWidth = 100
         }} catch {{}}
     }}
 
@@ -594,6 +618,25 @@ try {{
         if ($p.OutlineLevel -ge 1 -and $p.OutlineLevel -le 4) {{
             $p.Format.KeepWithNext = $true
         }}
+    }}
+
+    # Explicitly constrain all image shapes so they fit within their table cells and never overflow
+    foreach ($shape in $doc.InlineShapes) {{
+        try {{
+            $shape.LockAspectRatio = 0  # msoFalse
+            if ($shape.Range.Tables.Count -gt 0) {{
+                # In 2-column landscape table, available cell width is ~350pt. Set shape to 330x310pt.
+                $shape.Width = 330
+                $shape.Height = 310
+            }} else {{
+                # Standalone figure outside tables
+                if ($shape.Width -gt 550) {{
+                    $ratio = $shape.Height / $shape.Width
+                    $shape.Width = 550
+                    $shape.Height = 550 * $ratio
+                }}
+            }}
+        }} catch {{}}
     }}
 
     # Save as DOCX (16 = wdFormatXMLDocument)
@@ -608,7 +651,7 @@ try {{
         Write-Warning "PDF export error: $_"
     }}
 
-    $doc.Close()
+    $doc.Close([ref]$false)
 }} finally {{
     $word.Quit()
     [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null

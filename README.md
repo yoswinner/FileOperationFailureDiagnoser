@@ -12,7 +12,7 @@ When a user or application attempts to read, write, execute, or delete a file on
 - Is a DOS/NTFS `READONLY` attribute flag preventing write or deletion?
 - Is an active cloud sync daemon (Microsoft OneDrive or Google Drive) locking the file during synchronization?
 
-The **File Operation Failure Diagnoser** addresses this problem by querying four independent operating system subsystems concurrently, correlating the gathered evidence through a deterministic priority hierarchy, and presenting human-readable root-cause diagnoses alongside actionable, context-aware remediation advice.
+The **File Operation Failure Diagnoser** addresses this problem by querying four independent peer analyzers coordinated sequentially in one unified diagnosis pass, correlating the gathered evidence through a deterministic priority hierarchy, and presenting human-readable root-cause diagnoses alongside actionable, context-aware remediation advice.
 
 ### Core Operating Principles
 1. **Strictly Diagnostic & Read-Only**: The application never terminates processes, modifies user files, closes handles forcefully, alters security descriptors, or performs destructive disk deletions.
@@ -83,9 +83,9 @@ graph TD
 - **Process Enrichment**: Uses `psutil` solely to enrich process metadata (e.g. process creation time, full executable path, command-line arguments); `psutil` is **not** a substitute for Restart Manager lock detection.
 
 ### 2. Permission Analyzer (`src/diagnoser/analyzers/permissions.py`)
-- **Primary Mechanism**: Python's `os.access()` access evaluation combined with Win32 Security APIs (`advapi32.dll`: `GetNamedSecurityInfoW`, `LookupAccountSidW`).
-- **Functionality**: Evaluates effective read, write, and execute permissions for the current user token and resolves the owning user/group account name.
-- **Boundary Distinction**: Evaluates effective access rights; it does **not** claim to construct full NTFS Discretionary Access Control List (DACL) inheritance trees.
+- **Primary Mechanism**: Python OS access checks (`os.access()`) combined with Win32 Security APIs (`advapi32.dll`: `GetNamedSecurityInfoW`, `LookupAccountSidW`).
+- **Functionality**: Evaluates effective read, write, execute, and delete accessibility for the current user token and resolves the owning user/group account name.
+- **Boundary Distinction & Limitations**: Evaluates effective user rights via standard C-Runtime checks and attribute status. It does **not** evaluate recursive NTFS Discretionary Access Control List (DACL) inheritance trees, nor does it parse directory-level deletion permissions for `DELETE`.
 
 ### 3. File Attribute Analyzer (`src/diagnoser/analyzers/file_attributes.py`)
 - **Primary Mechanism**: Win32 File Attribute API (`kernel32.dll`: `GetFileAttributesW`).
@@ -193,7 +193,7 @@ Launch the Tkinter desktop GUI from the workspace root:
 ### Desktop GUI Controls:
 1. **Target File Input**: Enter a file path manually or click **Browse...** to pick a file.
 2. **Operation Selector**: Select `READ`, `WRITE`, `EXECUTE`, or `DELETE`.
-3. **Diagnose File Button**: Runs all four analyzers concurrently and updates the GUI.
+3. **Diagnose File Button**: Runs all four peer analyzers sequentially in one unified diagnosis pass and updates the GUI.
 4. **Primary Status Banner**: Displays the primary diagnosis badge (`OPERATION_ALLOWED`, `FILE_LOCKED`, `READ_ONLY`, etc.) and root-cause reason.
 5. **Scrollable Evidence Cards**:
    - **Process List**: Table showing locking process name, PID, and executable path.
@@ -228,7 +228,7 @@ The project includes a complete, self-contained demonstration kit located in `ar
 
 | Fixture Path | Intended Demonstration Scenario |
 | :--- | :--- |
-| `01_normal_file.txt` | Normal accessible file (`READ` -> `OPERATION_ALLOWED`). |
+| `01_normal_file.txt` | Normal accessible file (`READ` -> `OPERATION_ALLOWED`, `WRITE` -> `OPERATION_ALLOWED`). |
 | `02_read_only_file.txt` | Read-only semantics (`WRITE` -> `READ_ONLY`; `READ` -> `OPERATION_ALLOWED`). |
 | `03_hidden_archive_file.txt` | Hidden + Archive attributes (`READ` -> `OPERATION_ALLOWED`). |
 | `04_system_attribute_file.txt` | System attribute bitmask inspection (`READ` -> `OPERATION_ALLOWED`). |
@@ -261,11 +261,12 @@ All evidence deliverables are organized in `artifacts/review3/`:
   - Covers normal WRITE success (`OPERATION_ALLOWED`) without mutating the file, paired top/bottom captures solving vertical and horizontal clipping.
 - **Evidence Coverage Matrix**: `artifacts/review3/evidence_coverage_matrix.md`
 - **Screenshot Manifest**: `artifacts/review3/screenshot_manifest.md`
-- **Teacher Demonstration Guide (Word)**: `artifacts/review3/Review3_Demo_Guide.docx`
-- **Teacher Demonstration Guide (PDF)**: `artifacts/review3/Review3_Demo_Guide.pdf`
+- **Teacher Demonstration Guide (Word)**: `artifacts/review3/Review3_Demo_Guide.docx` (20-page landscape guide, unclipped side-by-side screenshots)
+- **Teacher Demonstration Guide (PDF)**: `artifacts/review3/Review3_Demo_Guide.pdf` (20-page landscape PDF)
 - **Teacher Demonstration Guide (Markdown)**: `artifacts/review3/Review3_Demo_Guide.md`
 - **Claude Chat Report Handoff**: `artifacts/review3/README_FOR_CLAUDE.md`
-- **Consolidated Evidence ZIP (v3)**: `artifacts/review3/Review3_Evidence_Pack_v3.zip` (verified integrity, includes `project_docs/README.md`)
+- **Consolidated Evidence ZIP (v4)**: `artifacts/review3/Review3_Evidence_Pack_v4.zip` (verified integrity, includes `project_docs/README.md`)
+- **Historical Evidence Archives Preserved**: `Review3_Evidence_Pack_v3.zip`, `Review3_Evidence_Pack_v2.zip`, `Review3_Evidence_Pack.zip`
 
 ---
 
@@ -273,8 +274,8 @@ All evidence deliverables are organized in `artifacts/review3/`:
 
 1. **Windows Restart Manager Access Barrier**:
    When an explicit Deny-Read ACE is placed on a file (`icacls /deny %USERNAME%:(R)`), the Windows Restart Manager API (`RmGetList`) fails with Win32 Error 5 (`ERROR_ACCESS_DENIED`) because the API itself lacks query rights on access-denied files. Per priority rule 4, `DiagnosisEngine` honestly classifies this inspection barrier as `UNKNOWN_ERROR` rather than fabricating a successful lock check.
-2. **Windows CRT `_access()` Semantics**:
-   Python's standard `os.access(W_OK)` on Windows delegates to the MSVC C-Runtime `_access()` function. By Microsoft OS design, `_access()` only inspects the DOS `FILE_ATTRIBUTE_READONLY` flag and does not evaluate NTFS DACL inheritance.
+2. **Windows CRT `_access()` and Permission Semantics**:
+   Python's standard `os.access(W_OK)` on Windows delegates to the MSVC C-Runtime `_access()` function. By Microsoft OS design, `_access()` inspects file accessibility and the DOS `FILE_ATTRIBUTE_READONLY` flag, but does not evaluate recursive NTFS DACL inheritance trees. For deletion, permission is evaluated via write accessibility and attribute status; full NTFS directory-level deletion rights are not parsed.
 3. **Cloud Synchronization Scope**:
    Supported providers are strictly limited to Microsoft OneDrive and Google Drive. Unsubstantiated third-party sync locks are never manufactured.
 

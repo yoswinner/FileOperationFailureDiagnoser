@@ -77,6 +77,7 @@ _README_CLAUDE_PATH = os.path.join(_ARTIFACTS_DIR, "README_FOR_CLAUDE.md")
 _ZIP_PATH_V1 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack.zip")
 _ZIP_PATH_V2 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack_v2.zip")
 _ZIP_PATH_V3 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack_v3.zip")
+_ZIP_PATH_V4 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack_v4.zip")
 
 
 # ======================================================================
@@ -1060,7 +1061,7 @@ class Review3EvidenceRunner:
         """Generate updated handoff guide for Claude Chat report writing."""
         self.logger.info("Generating README_FOR_CLAUDE.md...")
         py_ver = sys.version.split()[0]
-        content = f"""# Review 3 Implementation Evidence Handoff for Claude Chat (v3)
+        content = f"""# Review 3 Implementation Evidence Handoff for Claude Chat (v4)
 
 Welcome! This package contains the **complete, verified engineering evidence** for the Operating Systems Lab mini-project: **File Operation Failure Diagnoser** (Review 3 Final Submission).
 
@@ -1106,16 +1107,16 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
 
 - **Evidence Coverage Matrix**: `artifacts/review3/evidence_coverage_matrix.md`
 - **Screenshot Manifest**: `artifacts/review3/screenshot_manifest.md`
-- **Demonstration Guide (Word with Screenshots)**: `artifacts/review3/Review3_Demo_Guide.docx`
+- **Demonstration Guide (Word with Screenshots)**: `artifacts/review3/Review3_Demo_Guide.docx` (20-page landscape guide, unclipped side-by-side screenshots)
 - **Demonstration Guide (Markdown)**: `artifacts/review3/Review3_Demo_Guide.md`
-- **Demonstration Guide (PDF)**: `artifacts/review3/Review3_Demo_Guide.pdf`
+- **Demonstration Guide (PDF)**: `artifacts/review3/Review3_Demo_Guide.pdf` (20-page landscape PDF)
 - **Teacher Demo Fixtures**: `artifacts/review3/demo_fixtures/teacher_demo/`
 - **Verified Root README**: Included in evidence ZIP as `project_docs/README.md`
 - **Safe Helper Scripts**:
   - `scripts/prepare_teacher_demo_fixtures.ps1`
   - `scripts/restore_teacher_demo_fixtures.ps1`
   - `scripts/hold_demo_file_open.py`
-- **Consolidated Evidence ZIP (v3)**: `artifacts/review3/Review3_Evidence_Pack_v3.zip`
+- **Consolidated Evidence ZIP (v4)**: `artifacts/review3/Review3_Evidence_Pack_v4.zip`
 
 ---
 
@@ -1130,7 +1131,7 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
         self.logger.info(f"Claude handoff README updated at: {_README_CLAUDE_PATH}")
 
     # ------------------------------------------------------------------
-    # Step 5: Packaging Evidence Pack v3 ZIP
+    # Step 5: Packaging Evidence Pack v3 and v4 ZIPs
     # ------------------------------------------------------------------
 
     def package_evidence_zip_v3(self):
@@ -1184,6 +1185,57 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
             f"({size:,} bytes, {members_count} members, integrity verified)."
         )
 
+    def package_evidence_zip_v4(self):
+        """Create Review3_Evidence_Pack_v4.zip preserving all deliverables and including root README."""
+        self.logger.info("Packaging Review3_Evidence_Pack_v4.zip...")
+        root_readme = os.path.join(_PROJECT_ROOT, "README.md")
+        items_to_zip = [
+            ("project_docs/README.md", root_readme),
+            ("final_screenshots_v3", _FINAL_SCREENSHOTS_V3_DIR),
+            ("final_screenshots_v2", _FINAL_SCREENSHOTS_V2_DIR),
+            ("final_screenshots", _FINAL_SCREENSHOTS_DIR),
+            ("screenshots", _SCREENSHOTS_DIR),
+            ("debug_screenshots", _DEBUG_SCREENSHOTS_DIR),
+            ("logs", _LOGS_DIR),
+            ("demo_fixtures/teacher_demo", _TEACHER_DEMO_DIR),
+            ("evidence_coverage_matrix.md", _COVERAGE_MATRIX_PATH),
+            ("screenshot_manifest.md", _MANIFEST_PATH),
+            ("README_FOR_CLAUDE.md", _README_CLAUDE_PATH),
+            ("Review3_Demo_Guide.md", os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.md")),
+            ("Review3_Demo_Guide.docx", os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.docx")),
+            ("Review3_Demo_Guide.pdf", os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.pdf")),
+            ("scripts/prepare_teacher_demo_fixtures.ps1", os.path.join(_PROJECT_ROOT, "scripts", "prepare_teacher_demo_fixtures.ps1")),
+            ("scripts/restore_teacher_demo_fixtures.ps1", os.path.join(_PROJECT_ROOT, "scripts", "restore_teacher_demo_fixtures.ps1")),
+            ("scripts/hold_demo_file_open.py", os.path.join(_PROJECT_ROOT, "scripts", "hold_demo_file_open.py")),
+            ("docs/REVIEW3_ENGINEERING_LOG.md", os.path.join(_PROJECT_ROOT, "docs", "REVIEW3_ENGINEERING_LOG.md")),
+        ]
+
+        with zipfile.ZipFile(_ZIP_PATH_V4, "w", zipfile.ZIP_DEFLATED) as zf:
+            for arc_name, disk_path in items_to_zip:
+                if not os.path.exists(disk_path):
+                    continue
+                if os.path.isfile(disk_path):
+                    zf.write(disk_path, arc_name)
+                elif os.path.isdir(disk_path):
+                    for root, _, files in os.walk(disk_path):
+                        for f in files:
+                            full_p = os.path.join(root, f)
+                            rel_p = os.path.relpath(full_p, disk_path)
+                            zf.write(full_p, os.path.join(arc_name, rel_p))
+
+        # Test archive integrity
+        with zipfile.ZipFile(_ZIP_PATH_V4, "r") as zf:
+            bad_file = zf.testzip()
+            if bad_file:
+                raise RuntimeError(f"Corrupt file in ZIP archive: {bad_file}")
+            members_count = len(zf.infolist())
+
+        size = os.path.getsize(_ZIP_PATH_V4)
+        self.logger.info(
+            f"Evidence Pack v4 created successfully: {_ZIP_PATH_V4} "
+            f"({size:,} bytes, {members_count} members, integrity verified)."
+        )
+
 
 # ======================================================================
 # Main Entry Point
@@ -1208,10 +1260,10 @@ def main():
     runner.generate_manifest()
     runner.generate_readme_for_claude()
 
-    # 4. Package Evidence Pack v3
-    runner.package_evidence_zip_v3()
+    # 4. Package Evidence Pack v4 (and preserve v3)
+    runner.package_evidence_zip_v4()
 
-    print("\nDemonstrations, manifest, and evidence package v3 generated successfully.\n")
+    print("\nDemonstrations, manifest, and evidence package v4 generated successfully.\n")
 
 
 if __name__ == "__main__":
