@@ -220,6 +220,16 @@ When multiple failure conditions coexist on a single file, the Diagnosis Engine 
 | Live Windows Restart Manager Lock | Yes | `tests/test_diagnoser.py::test_locked_file_detected_windows` | Yes | Verified |
 | Live Windows Attribute Inspection | Yes | `tests/test_file_attributes.py::test_live_windows_file_attributes` | Yes | Verified |
 | Live Windows Sync Discovery | Yes | `tests/test_sync_conflict.py::test_live_onedrive_roots_discovery` | Yes | Verified |
+| GUI Accessible File Display | Yes | `tests/test_gui.py::test_01_accessible_file_operation_allowed` | Yes | Verified |
+| GUI Missing File Handling | Yes | `tests/test_gui.py::test_02_missing_file_distinct_from_success` | Yes | Verified |
+| GUI Process Lock Display | Yes | `tests/test_gui.py::test_03_locked_file_displays_real_process_telemetry` | Yes | Verified |
+| GUI Permission Display & DACL Note | Yes | `tests/test_gui.py::test_04_permission_restricted_file_presentation` | Yes | Verified |
+| GUI Read-Only Attribute Display | Yes | `tests/test_gui.py::test_05_readonly_attribute_write_operation` | Yes | Verified |
+| GUI Cloud Sync Display (OneDrive) | Yes | `tests/test_gui.py::test_07_onedrive_path_association_without_confirmed_lock` | Yes | Verified |
+| GUI Cloud Sync Display (Google Drive) | Yes | `tests/test_gui.py::test_08_google_drive_association_with_client_running` | Yes | Verified |
+| GUI Confirmed Sync-Client Lock | Yes | `tests/test_gui.py::test_09_confirmed_sync_client_lock` | Yes | Verified |
+| GUI Multi-Finding Preservation | Yes | `tests/test_gui.py::test_10_multiple_simultaneous_findings_preserve_all_evidence` | Yes | Verified |
+| GUI Panel Reset & Stale State Clearing | Yes | `tests/test_gui.py::test_12_reset_panels_clears_stale_data_completely` | Yes | Verified |
 
 ---
 
@@ -232,9 +242,9 @@ When multiple failure conditions coexist on a single file, the Diagnosis Engine 
 3. **No Private Cloud APIs**:
    The diagnoser does not communicate with Microsoft or Google cloud telemetry servers or evaluate online cloud sync queues. Contention is evaluated strictly via local OS evidence.
 4. **NTFS DACL Parsing vs `os.access`**:
-   The `PermissionAnalyzer` evaluates permissions using `os.access()` combined with Windows file ownership queries; full NTFS DACL inheritance trees are not parsed.
-5. **GUI Wiring Scheduled**:
-   The `DiagnosisEngine` coordinates all four peer analyzers, but GUI panels for File Attributes and Cloud Sync remain to be connected in Sprint 4.
+   The `PermissionAnalyzer` evaluates permissions using `os.access()` combined with Windows file ownership queries; full NTFS DACL inheritance trees are not parsed. The GUI explicitly presents a disclaimer to that effect.
+5. **GUI Complete Integration**:
+   Sprint 4 fully connected all four peer analyzers to the desktop Tkinter interface with dynamic reset mechanisms and clean secondary finding preservation. Automated visual capture / screenshot generation is scheduled for Sprint 5.
 
 ---
 
@@ -242,15 +252,15 @@ When multiple failure conditions coexist on a single file, the Diagnosis Engine 
 
 | Scenario | Expected Diagnostic Output | Status |
 | :--- | :--- | :--- |
-| **Accessible Normal File** | `OPERATION_ALLOWED`: No locking, attribute, or permission blockers. | Automated & Manual Verified |
-| **Nonexistent File** | `FILE_NOT_FOUND`: Structured error instructing user to check path. | Automated & Manual Verified |
-| **Active Process Lock** | `FILE_LOCKED`: Holding process name and PID identified via Restart Manager. | Automated & Manual Verified |
-| **Read-Only Attribute** | `READ_ONLY`: Detected via `FileAttributeAnalyzer`; recommender advises attribute clearance. | Automated & Manual Verified |
-| **Permission Denied** | `PERMISSION_DENIED`: Owner reported; recommender advises NTFS security dialog. | Automated Verified |
-| **OneDrive Sync Contention** | `SYNC_CONFLICT`: OneDrive root recognized, client identified, placeholder flags reported. | Automated Verified |
-| **Google Drive Virtual Mount** | `SYNC_CONFLICT`: Virtual drive / mount point discovered. | Automated Verified |
-| **Multiple Coexisting Findings** | Deterministic priority resolution (`FILE_LOCKED` takes precedence over attributes/sync). | Automated Verified |
-| **Analyzer Error / Permission Denied** | Graceful fallback returning structured error result without application crash. | Automated Verified |
+| **Accessible Normal File** | `OPERATION_ALLOWED`: No locking, attribute, or permission blockers. | Automated & Manual GUI Verified |
+| **Nonexistent File** | `FILE_NOT_FOUND`: Structured error instructing user to check path. Downstream checks skipped. | Automated & Manual GUI Verified |
+| **Active Process Lock** | `FILE_LOCKED`: Holding process name and PID identified via Restart Manager. | Automated & Manual GUI Verified |
+| **Read-Only Attribute** | `READ_ONLY`: Detected via `FileAttributeAnalyzer`; recommender advises attribute clearance. | Automated & Manual GUI Verified |
+| **Permission Denied** | `PERMISSION_DENIED`: Owner reported; recommender advises NTFS security dialog. | Automated & Manual GUI Verified |
+| **OneDrive Sync Contention** | `SYNC_CONFLICT`: OneDrive root recognized, client identified, placeholder flags reported. | Automated & Manual GUI Verified |
+| **Google Drive Virtual Mount** | `SYNC_CONFLICT`: Virtual drive / mount point discovered. | Automated & Manual GUI Verified |
+| **Multiple Coexisting Findings** | Deterministic priority resolution (`FILE_LOCKED` takes precedence over attributes/sync). | Automated & Manual GUI Verified |
+| **Analyzer Error / Permission Denied** | Graceful fallback returning structured error result without application crash. | Automated & Manual GUI Verified |
 
 ---
 
@@ -258,7 +268,7 @@ When multiple failure conditions coexist on a single file, the Diagnosis Engine 
 
 The final visual evidence phase is scheduled for execution following the completion of GUI wiring in Sprint 4. The planned demonstration portfolio consists of verified scenarios captured on Windows 11:
 1. **Scenario 1 — Baseline Accessible File**: `OPERATION_ALLOWED` with all four panels populated (no lock, permissions granted, standard attributes, non-sync directory).
-2. **Scenario 2 — Missing Target File**: `FILE_NOT_FOUND` with clean error notification and user guidance.
+2. **Scenario 2 — Missing Target File**: `FILE_NOT_FOUND` with clean error notification and user guidance (all four panels explicitly show skipped checks).
 3. **Scenario 3 — Real Active Process Lock**: `FILE_LOCKED` displaying locking process name, PID, executable path, and close recommendation.
 4. **Scenario 4 — Read-Only Attribute Restriction**: `READ_ONLY` displaying active `READONLY` bit in attribute panel and advisory to uncheck in Properties.
 5. **Scenario 5 — Permission Denial**: `PERMISSION_DENIED` displaying unresolved access rights, file owner, and administrator delegation guidance.
@@ -284,7 +294,12 @@ The final visual evidence phase is scheduled for execution following the complet
 - [x] Sprint 3: Recommender integrated for all diagnostic outcomes.
 - [x] Sprint 3: Deterministic priority rules implemented and verified.
 - [x] Sprint 3: 15 new integration tests added to `tests/test_diagnoser.py` (total 139 collected: 138 passed, 1 skipped).
-- [ ] Sprint 4: GUI updated to display File Attributes and Cloud Sync panels with real data.
+- [x] Sprint 4: GUI updated to display File Attributes and Cloud Sync panels with real data.
+- [x] Sprint 4: Robust panel reset mechanism (`_reset_panels()`) eliminating stale data leakage across runs.
+- [x] Sprint 4: Multi-finding preservation displaying secondary evidence across panels without altering primary root cause.
+- [x] Sprint 4: 16 automated GUI unit tests created in `tests/test_gui.py` (total 155 collected: 154 passed, 1 skipped).
+- [x] Sprint 4: Live Windows GUI desktop launch and interactive diagnosis verified (`diagnoser.gui.app`).
+- [ ] Sprint 5: Automated real-GUI screenshot capture and demonstration artifact generation.
 - [ ] Sprint 5: Final Review 3 report and presentation materials finalized.
 
 ---
@@ -307,4 +322,11 @@ The final visual evidence phase is scheduled for execution following the complet
 - **Files**: `src/diagnoser/engine/diagnosis.py`, `src/diagnoser/recommendations/recommender.py`, `tests/test_diagnoser.py`, `docs/REVIEW3_ENGINEERING_LOG.md`.
 - **Summary**: Integrated all four peer analyzers into `DiagnosisEngine`, implemented deterministic root-cause priority resolution, preserved secondary evidence, integrated standalone `Recommender`, and added 15 integration tests.
 - **Tests**: 139 collected, 138 passed, 0 failed, 1 skipped.
-- **Commit Target**: `feat: integrate four-analyzer diagnosis engine`.
+- **Commit**: `5545165` (`feat: integrate four-analyzer diagnosis engine`).
+
+### Sprint 4
+- **Files**: `src/diagnoser/gui/main_window.py`, `tests/test_gui.py`, `docs/REVIEW3_ENGINEERING_LOG.md`.
+- **Summary**: Connected real results from all four peer analyzers to the desktop Tkinter GUI. Replaced static "Coming Soon" placeholders with live cards for File Attributes and Cloud Synchronization. Implemented `_reset_panels()` to guarantee zero stale data leakage across repeated diagnoses. Added status indicators distinguishing states via text and icons (`✓`, `✕`, `⚠`, `?`). Added honest disclaimer regarding NTFS DACL evaluation. Implemented 16 automated GUI unit tests covering all 14 required scenarios.
+- **Tests**: 155 collected, 154 passed, 0 failed, 1 skipped on Windows.
+- **Live GUI Launch**: Verified on Windows 11 with `diagnoser.gui.app` and live file diagnoses.
+- **Commit Target**: `feat: integrate attribute and sync results into GUI`.
