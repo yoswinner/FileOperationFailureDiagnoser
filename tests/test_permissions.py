@@ -162,6 +162,7 @@ class TestPermissionAnalyzerCrossPlatform:
             assert "read" in result.permission_bits
             assert "write" in result.permission_bits
             assert "execute" in result.permission_bits
+            assert "delete" in result.permission_bits
             assert all(
                 isinstance(v, bool)
                 for v in result.permission_bits.values()

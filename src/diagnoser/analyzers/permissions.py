@@ -201,15 +201,19 @@ class PermissionAnalyzer(BaseAnalyzer):
     # ------------------------------------------------------------------
     @staticmethod
     def _get_permission_bits(file_path: str) -> Dict[str, bool]:
-        """Check all three access types and return a dict.
+        """Check all access types and return a dict.
+
+        On Windows and POSIX, basic file deletion rights correlate with write
+        access (os.W_OK) on the file / directory boundary.
 
         Returns:
-            {'read': bool, 'write': bool, 'execute': bool}
+            {'read': bool, 'write': bool, 'execute': bool, 'delete': bool}
         """
         return {
             "read": os.access(file_path, os.R_OK),
             "write": os.access(file_path, os.W_OK),
             "execute": os.access(file_path, os.X_OK),
+            "delete": os.access(file_path, os.W_OK),
         }
 
     # ------------------------------------------------------------------

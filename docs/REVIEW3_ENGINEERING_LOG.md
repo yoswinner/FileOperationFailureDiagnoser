@@ -398,3 +398,43 @@ Window captures were performed via zero-dependency native Win32/GDI+ capture API
      - Consolidated all deliverables into `artifacts/review3/Review3_Evidence_Pack_v2.zip` (2,802,464 bytes, 76 items), passing automated archive integrity testing with 0 corrupt files.
 - **Tests**: 156 collected, 155 passed, 0 failed, 1 skipped on Windows 11 Pro 64-bit (Build 26300, `Python 3.13.14`, `pytest 9.1.1`).
 - **Commit Target**: `docs: finalize Review 3 readiness and project README`.
+
+### Final Evidence Quality Corrections and Submission Readiness
+- **Files**:
+  - `src/diagnoser/analyzers/permissions.py`
+  - `src/diagnoser/gui/main_window.py`
+  - `tests/test_permissions.py`
+  - `tests/test_gui.py`
+  - `scripts/capture_review3_evidence.py`
+  - `scripts/build_review3_demo_guide.py`
+  - `artifacts/review3/Review3_Demo_Guide.md`
+  - `README.md`
+  - `docs/REVIEW3_ENGINEERING_LOG.md`
+  - `artifacts/review3/final_screenshots_v3/*`
+  - `artifacts/review3/evidence_coverage_matrix.md`
+  - `artifacts/review3/screenshot_manifest.md`
+  - `artifacts/review3/README_FOR_CLAUDE.md`
+  - `artifacts/review3/Review3_Evidence_Pack_v3.zip`
+- **Technical & Presentation Corrections**:
+  1. **Horizontal GUI Text Clipping Elimination**:
+     - *Issue Identified*: On standard display DPI, long explanatory labels (DACL limitation disclaimer, attribute operational effect, cloud sync detail path, recommendations) truncated at card margins.
+     - *Correction*: Refined `wraplength` across `main_window.py`: card detail rows set to responsive wrapping (`wraplength=310-330`), status banner to `wraplength=780`, recommendation label to `wraplength=860`. Ensures all text wraps cleanly with margins on both sides.
+  2. **DELETE Row in Permission Panel**:
+     - *Issue Identified*: The Permissions card displayed only READ, WRITE, and EXECUTE rows.
+     - *Correction*: Added `"delete"` evaluation to `permissions.py` (`_get_permission_bits`), rendered distinct `DELETE` row in `main_window.py` bound to live `PermissionCheckResult` data, and added test verification in `tests/test_gui.py` (`test_17_permission_panel_displays_delete_row_with_backend_value`).
+  3. **Normal WRITE Success Coverage**:
+     - *Implementation*: Added Scenario 01b (`01_normal_file.txt`, operation `WRITE`), returning `OPERATION_ALLOWED`. Verified that the diagnoser evaluates WRITE permission safely without mutating disk state.
+  4. **Demonstration Guide Layout Overhaul**:
+     - *Issue Identified*: Previous guide rendered as 44–60 pages with excessive whitespace, blank pages, and figure captions detached from screenshots due to large stacked 580px images.
+     - *Solution*: Re-engineered `build_review3_demo_guide.py` to embed paired screenshots side-by-side in a 2-column table (`table.screenshot-pair-table`). Configured Word COM automation with 0.6" margins, `CantSplit = $true` on table rows, and `KeepWithNext = $true` on headings and captions. Replaced hardcoded example `PID 8776` in sequence diagram with "the actual PID returned by Restart Manager".
+  5. **Scenario Run Telemetry Repair**:
+     - *Issue Identified*: `scenario_run.log` previously contained only a packaging message due to file reinitialization.
+     - *Solution*: Re-engineered logger in `capture_review3_evidence.py` to preserve scenario records and format comprehensive per-scenario execution telemetry (ID, name, fixture, operation, expected vs actual diagnosis, PASS/FAIL/BLOCKED status, screenshot paths, byte sizes, and cleanup notes).
+  6. **Reconciled Test & Scope Metrics**:
+     - Explicitly distinguished **14 logical scenario groups** vs. **16 individual scenario executions** (due to READ/WRITE variations on normal and read-only fixtures).
+     - Standardized environment across documentation: Windows 11 Pro 64-bit, Python 3.13.14, pytest 9.1.1.
+     - Latest suite: **157 collected, 156 passed, 0 failed, 1 skipped**.
+  7. **Consolidated Evidence ZIP (v3)**:
+     - Packaged `Review3_Evidence_Pack_v3.zip` including `project_docs/README.md` (root README copy), `final_screenshots_v3/`, verified logs, fixtures, scripts, and demo guides. Passed zipfile integrity testing.
+- **Tests**: 157 collected, 156 passed, 0 failed, 1 skipped on Windows 11 Pro 64-bit (`Python 3.13.14`, `pytest 9.1.1`).
+- **Commit Target**: `docs: polish final Review 3 evidence and demonstration kit`.

@@ -197,7 +197,7 @@ Launch the Tkinter desktop GUI from the workspace root:
 4. **Primary Status Banner**: Displays the primary diagnosis badge (`OPERATION_ALLOWED`, `FILE_LOCKED`, `READ_ONLY`, etc.) and root-cause reason.
 5. **Scrollable Evidence Cards**:
    - **Process List**: Table showing locking process name, PID, and executable path.
-   - **Permissions**: Owner account, current user token, and effective operation rights.
+   - **Permissions**: Owner account, current user token, full-DACL limitation disclaimer, and distinct operational rights rows (READ, WRITE, EXECUTE, DELETE).
    - **File Attributes**: Raw bitmask, detection method, and individual flag checkboxes.
    - **Cloud Synchronization**: Detected provider, sync root, daemon state, and evidence level.
    - **Recommendation**: Context-aware remediation guidance.
@@ -214,8 +214,8 @@ $env:PYTHONDONTWRITEBYTECODE = "1"; .\venv\Scripts\python.exe -B -m pytest -p no
 
 ### Latest Test Results (Review 3 Final Audit):
 - **Platform**: Windows 11 Pro 64-bit (Build 26300), Python 3.13.14 (Python 3.10+ supported), pytest 9.1.1
-- **Collected**: 156 test items
-- **Passed**: 155 tests passed (100% of runnable tests)
+- **Collected**: 157 test items
+- **Passed**: 156 tests passed (100% of runnable tests)
 - **Failed**: 0 failures
 - **Skipped**: 1 test (`test_reopen_audit_reopen_failure_returns_false` requiring exclusive OS handle lock)
 - **Raw Test Log**: `artifacts/review3/logs/test_results.txt`
@@ -256,16 +256,16 @@ powershell -ExecutionPolicy Bypass -File scripts/restore_teacher_demo_fixtures.p
 
 All evidence deliverables are organized in `artifacts/review3/`:
 
-- **Complete Paired Screenshots (v2)**: `artifacts/review3/final_screenshots_v2/`
-  - 30 genuine Windows application-window captures covering all 14 demonstration scenarios.
-  - Each scenario includes paired captures (`*_top.png` and `*_bottom.png`) solving scrollbar viewport truncation without artificial image stitching.
+- **Complete Paired Screenshots (v3)**: `artifacts/review3/final_screenshots_v3/`
+  - 32 genuine Windows application-window captures covering 14 logical groups and 16 individual executions.
+  - Covers normal WRITE success (`OPERATION_ALLOWED`) without mutating the file, paired top/bottom captures solving vertical and horizontal clipping.
 - **Evidence Coverage Matrix**: `artifacts/review3/evidence_coverage_matrix.md`
 - **Screenshot Manifest**: `artifacts/review3/screenshot_manifest.md`
 - **Teacher Demonstration Guide (Word)**: `artifacts/review3/Review3_Demo_Guide.docx`
 - **Teacher Demonstration Guide (PDF)**: `artifacts/review3/Review3_Demo_Guide.pdf`
 - **Teacher Demonstration Guide (Markdown)**: `artifacts/review3/Review3_Demo_Guide.md`
 - **Claude Chat Report Handoff**: `artifacts/review3/README_FOR_CLAUDE.md`
-- **Consolidated Evidence ZIP (v2)**: `artifacts/review3/Review3_Evidence_Pack_v2.zip` (verified integrity, 76 items)
+- **Consolidated Evidence ZIP (v3)**: `artifacts/review3/Review3_Evidence_Pack_v3.zip` (verified integrity, includes `project_docs/README.md`)
 
 ---
 
@@ -315,7 +315,8 @@ FileOperationFailureDiagnoser/
 │   └── restore_teacher_demo_fixtures.ps1 # Resets demo file attributes
 ├── artifacts/
 │   └── review3/
-│       ├── final_screenshots_v2/         # 30 paired top/bottom unclipped GUI captures
+│       ├── final_screenshots_v3/         # 32 paired top/bottom unclipped GUI captures (v3)
+│       ├── final_screenshots_v2/         # 30 paired top/bottom GUI captures preserved
 │       ├── final_screenshots/            # Original single-frame captures preserved
 │       ├── demo_fixtures/teacher_demo/   # Persistent demonstration fixtures
 │       ├── logs/                         # Pytest output and scenario execution logs
@@ -325,7 +326,7 @@ FileOperationFailureDiagnoser/
 │       ├── evidence_coverage_matrix.md   # Evidence mapping and scenario coverage
 │       ├── screenshot_manifest.md        # Screenshot deliverable manifest
 │       ├── README_FOR_CLAUDE.md          # Handoff notes for Claude Chat report writing
-│       └── Review3_Evidence_Pack_v2.zip  # Consolidated deliverable ZIP archive
+│       └── Review3_Evidence_Pack_v3.zip  # Consolidated deliverable ZIP archive
 ├── docs/
 │   └── REVIEW3_ENGINEERING_LOG.md        # Comprehensive milestone engineering log
 ├── README.md                             # Project overview and documentation

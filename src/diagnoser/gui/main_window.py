@@ -523,9 +523,9 @@ class MainWindow:
         card = ttk.Frame(frame, style="Card.TFrame", padding=12)
         card.pack(fill="both", expand=True)
 
-        self._perm_owner_lbl = self._kv_row(card, "Owner:", "—", label_width=14)
-        self._perm_user_lbl = self._kv_row(card, "Current User:", "—", label_width=14)
-        self._perm_method_lbl = self._kv_row(card, "Detection:", "—", label_width=14)
+        self._perm_owner_lbl = self._kv_row(card, "Owner:", "—", label_width=14, wraplength=320)
+        self._perm_user_lbl = self._kv_row(card, "Current User:", "—", label_width=14, wraplength=320)
+        self._perm_method_lbl = self._kv_row(card, "Detection:", "—", label_width=14, wraplength=320)
 
         sep = ttk.Frame(card, style="Card.TFrame", height=1)
         sep.pack(fill="x", pady=(6, 6))
@@ -562,9 +562,9 @@ class MainWindow:
         card = ttk.Frame(frame, style="Card.TFrame", padding=12)
         card.pack(fill="both", expand=True)
 
-        self._attr_raw_lbl = self._kv_row(card, "Raw Bitmask:", "—", label_width=14)
-        self._attr_method_lbl = self._kv_row(card, "Detection:", "—", label_width=14)
-        self._attr_effect_lbl = self._kv_row(card, "Effect on Op:", "—", label_width=14)
+        self._attr_raw_lbl = self._kv_row(card, "Raw Bitmask:", "—", label_width=14, wraplength=320)
+        self._attr_method_lbl = self._kv_row(card, "Detection:", "—", label_width=14, wraplength=320)
+        self._attr_effect_lbl = self._kv_row(card, "Effect on Op:", "—", label_width=14, wraplength=320)
 
         sep = ttk.Frame(card, style="Card.TFrame", height=1)
         sep.pack(fill="x", pady=(6, 6))
@@ -590,11 +590,11 @@ class MainWindow:
         card = ttk.Frame(frame, style="Card.TFrame", padding=12)
         card.pack(fill="both", expand=True)
 
-        self._sync_provider_lbl = self._kv_row(card, "Provider:", "—", label_width=15)
-        self._sync_root_lbl = self._kv_row(card, "Sync Root:", "—", label_width=15)
-        self._sync_client_lbl = self._kv_row(card, "Client Daemon:", "—", label_width=15)
-        self._sync_evidence_lbl = self._kv_row(card, "Evidence Level:", "—", label_width=15)
-        self._sync_details_lbl = self._kv_row(card, "Details:", "—", label_width=15)
+        self._sync_provider_lbl = self._kv_row(card, "Provider:", "—", label_width=15, wraplength=310)
+        self._sync_root_lbl = self._kv_row(card, "Sync Root:", "—", label_width=15, wraplength=310)
+        self._sync_client_lbl = self._kv_row(card, "Client Daemon:", "—", label_width=15, wraplength=310)
+        self._sync_evidence_lbl = self._kv_row(card, "Evidence Level:", "—", label_width=15, wraplength=310)
+        self._sync_details_lbl = self._kv_row(card, "Details:", "—", label_width=15, wraplength=310)
 
         self._sync_placeholder = ttk.Label(
             card,
@@ -620,7 +620,7 @@ class MainWindow:
             card,
             text="No recommendation available.",
             style="Card.TLabel",
-            wraplength=800,
+            wraplength=860,
         )
         self._rec_label.pack(anchor="w")
 
@@ -882,8 +882,24 @@ class MainWindow:
         else:
             self._perm_placeholder.configure(text="")
 
-        if perm.permission_bits:
-            for name, allowed in sorted(perm.permission_bits.items()):
+        if perm.permission_bits or perm.operation:
+            standard_ops = ["read", "write", "execute", "delete"]
+            bits_dict = dict(perm.permission_bits) if perm.permission_bits else {}
+
+            items_to_render = []
+            for op_name in standard_ops:
+                if op_name in bits_dict:
+                    items_to_render.append((op_name, bits_dict[op_name]))
+                elif perm.operation and perm.operation.lower() == op_name:
+                    items_to_render.append((op_name, perm.permitted))
+                else:
+                    items_to_render.append((op_name, None))
+
+            for extra_name in sorted(bits_dict.keys()):
+                if extra_name not in standard_ops:
+                    items_to_render.append((extra_name, bits_dict[extra_name]))
+
+            for name, allowed in items_to_render:
                 bit_row = ttk.Frame(
                     self._perm_bits_frame, style="Card.TFrame",
                 )
@@ -907,7 +923,7 @@ class MainWindow:
                     text=f"  {indicator}  {name.upper()}",
                     style="PermBit.TLabel",
                     foreground=colour,
-                    width=20,
+                    width=16,
                 ).pack(side="left")
 
                 ttk.Label(

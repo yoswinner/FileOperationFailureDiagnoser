@@ -18,6 +18,7 @@ _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _ARTIFACTS_DIR = os.path.join(_PROJECT_ROOT, "artifacts", "review3")
 _SCREENSHOTS_DIR = os.path.join(_ARTIFACTS_DIR, "final_screenshots")
 _V2_SCREENSHOTS_DIR = os.path.join(_ARTIFACTS_DIR, "final_screenshots_v2")
+_V3_SCREENSHOTS_DIR = os.path.join(_ARTIFACTS_DIR, "final_screenshots_v3")
 _HTML_PATH = os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.html")
 _DOCX_PATH = os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.docx")
 _PDF_PATH = os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.pdf")
@@ -29,21 +30,37 @@ def build_html_content() -> str:
         base_id = filename.removesuffix(".png")
         top_filename = f"{base_id}_top.png"
         bottom_filename = f"{base_id}_bottom.png"
-        top_path = os.path.join(_V2_SCREENSHOTS_DIR, top_filename)
-        bottom_path = os.path.join(_V2_SCREENSHOTS_DIR, bottom_filename)
+
+        # Check v3 first, then v2, then fallback base names
+        top_path = os.path.join(_V3_SCREENSHOTS_DIR, top_filename)
+        bottom_path = os.path.join(_V3_SCREENSHOTS_DIR, bottom_filename)
+
+        if not (os.path.exists(top_path) and os.path.exists(bottom_path)):
+            top_path = os.path.join(_V2_SCREENSHOTS_DIR, top_filename)
+            bottom_path = os.path.join(_V2_SCREENSHOTS_DIR, bottom_filename)
+
+        if not (os.path.exists(top_path) and os.path.exists(bottom_path)):
+            # If base_id was 01a_normal_file_read, check 01_normal_file_read in v2
+            fallback_base = base_id.replace("01a_", "01_")
+            top_path = os.path.join(_V2_SCREENSHOTS_DIR, f"{fallback_base}_top.png")
+            bottom_path = os.path.join(_V2_SCREENSHOTS_DIR, f"{fallback_base}_bottom.png")
 
         if os.path.exists(top_path) and os.path.exists(bottom_path):
             top_uri = top_path.replace("\\", "/")
             bottom_uri = bottom_path.replace("\\", "/")
             return f"""
-            <div class="figure-container">
-                <p class="caption"><strong>Figure (Upper Viewport):</strong> {caption} — Controls, Status Badge & Process Locks</p>
-                <img src="{top_uri}" alt="{caption} - Upper" class="screenshot" />
-            </div>
-            <div class="figure-container">
-                <p class="caption"><strong>Figure (Lower Viewport):</strong> {caption} — File Attributes, Cloud Sync & Recommendations</p>
-                <img src="{bottom_uri}" alt="{caption} - Lower" class="screenshot" />
-            </div>
+            <table class="screenshot-pair-table">
+                <tr>
+                    <td class="screenshot-cell">
+                        <img src="{top_uri}" alt="{caption} - Upper Viewport" class="pair-screenshot" />
+                        <p class="pair-caption"><strong>Upper Viewport:</strong> Controls, Status & Process Locks</p>
+                    </td>
+                    <td class="screenshot-cell">
+                        <img src="{bottom_uri}" alt="{caption} - Lower Viewport" class="pair-screenshot" />
+                        <p class="pair-caption"><strong>Lower Viewport:</strong> Attributes, Sync & Recommendation</p>
+                    </td>
+                </tr>
+            </table>
             """
 
         full_path = os.path.join(_SCREENSHOTS_DIR, filename).replace("\\", "/")
@@ -156,24 +173,56 @@ def build_html_content() -> str:
         color: #1e40af;
         margin-bottom: 4px;
     }}
+    table.screenshot-pair-table {{
+        width: 100%;
+        border-collapse: collapse;
+        margin: 8px 0 14px 0;
+        table-layout: fixed;
+        page-break-inside: avoid;
+    }}
+    td.screenshot-cell {{
+        width: 50%;
+        vertical-align: top;
+        padding: 4px 6px;
+        border: none;
+        text-align: center;
+    }}
+    img.pair-screenshot {{
+        width: 100%;
+        max-width: 330px;
+        height: auto;
+        border: 1px solid #cbd5e1;
+        border-radius: 4px;
+        display: block;
+        margin: 0 auto;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }}
+    p.pair-caption {{
+        font-size: 8.5pt;
+        color: #475569;
+        margin-top: 4px;
+        margin-bottom: 2px;
+        line-height: 1.25;
+        font-style: italic;
+    }}
     .figure-container {{
         text-align: center;
-        margin: 18px 0 24px 0;
+        margin: 12px 0 18px 0;
         page-break-inside: avoid;
     }}
     img.screenshot {{
-        width: 580px;
+        width: 480px;
         max-width: 95%;
         height: auto;
         border: 1px solid #cbd5e1;
         border-radius: 4px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
     }}
     p.caption {{
-        font-size: 9pt;
+        font-size: 8.5pt;
         color: #64748b;
         font-style: italic;
-        margin-top: 6px;
+        margin-top: 4px;
     }}
     code {{
         font-family: Consolas, 'Courier New', monospace;
@@ -207,7 +256,7 @@ def build_html_content() -> str:
         </tr>
         <tr>
             <td><strong>Platform:</strong> Microsoft Windows 11 Pro 64-bit</td>
-            <td><strong>Runtime:</strong> Python 3.12 (venv) & Tkinter 8.6 Desktop GUI</td>
+            <td><strong>Runtime:</strong> Python {sys.version.split()[0]} (venv) & Tkinter 8.6 Desktop GUI</td>
         </tr>
         <tr>
             <td><strong>Recommended Presentation Duration:</strong> 5–8 Minutes</td>
@@ -286,15 +335,25 @@ The <strong>File Operation Failure Diagnoser</strong> is an automated, non-invas
 
 <h2>3. Step-by-Step Live Walkthrough & Screenshot Atlas</h2>
 
-<h3>Scenario 1 — Baseline Accessible File (READ)</h3>
+<h3>Scenario 1A — Baseline Accessible File (READ)</h3>
 <ul>
     <li><strong>Target Fixture:</strong> <code>artifacts/review3/demo_fixtures/teacher_demo/01_normal_file.txt</code></li>
     <li><strong>Requested Operation:</strong> <code>READ</code></li>
     <li><strong>Expected Primary Diagnosis:</strong> <code>OPERATION_ALLOWED</code></li>
-    <li><strong>Evidence Panels to Point To:</strong> Green status badge, empty lock treeview, granted read/write bits, Archive bitmask (0x0020), "No provider association detected".</li>
+    <li><strong>Evidence Panels to Point To:</strong> Green status badge, empty lock treeview, granted read/write/exec/delete bits, Archive bitmask (0x0020), "No provider association detected".</li>
     <li><strong>Explanation to Teacher:</strong> <em>"Notice how all four peer analyzers execute concurrently. None encountered a contention condition, so the engine cleanly concludes that read access is allowed."</em></li>
 </ul>
-{img_tag("01_normal_file_read.png", "Scenario 1 — Baseline Accessible File (READ -> OPERATION_ALLOWED)")}
+{img_tag("01a_normal_file_read.png", "Scenario 1A — Baseline Accessible File (READ -> OPERATION_ALLOWED)")}
+
+<h3>Scenario 1B — Baseline Accessible File (WRITE)</h3>
+<ul>
+    <li><strong>Target Fixture:</strong> <code>artifacts/review3/demo_fixtures/teacher_demo/01_normal_file.txt</code></li>
+    <li><strong>Requested Operation:</strong> <code>WRITE</code></li>
+    <li><strong>Expected Primary Diagnosis:</strong> <code>OPERATION_ALLOWED</code></li>
+    <li><strong>Evidence Panels to Point To:</strong> Green status badge, WRITE permission permitted, Archive attribute (0x0020), and recommendation confirming file is ready.</li>
+    <li><strong>Explanation to Teacher:</strong> <em>"Evaluating WRITE on an unrestricted file returns OPERATION_ALLOWED. Crucially, the diagnoser assesses write accessibility safely without modifying or writing to the target file."</em></li>
+</ul>
+{img_tag("01b_normal_file_write.png", "Scenario 1B — Baseline Accessible File (WRITE -> OPERATION_ALLOWED)")}
 
 <h3>Scenario 2 — Nonexistent File Target</h3>
 <ul>
@@ -516,6 +575,26 @@ try {{
     $pdfPath = [System.IO.Path]::GetFullPath('{_PDF_PATH}')
 
     $doc = $word.Documents.Open($htmlPath)
+
+    # Set page margins to 0.6 inch to optimize layout
+    $doc.PageSetup.TopMargin = $word.InchesToPoints(0.6)
+    $doc.PageSetup.BottomMargin = $word.InchesToPoints(0.6)
+    $doc.PageSetup.LeftMargin = $word.InchesToPoints(0.6)
+    $doc.PageSetup.RightMargin = $word.InchesToPoints(0.6)
+
+    # Ensure table rows never split across page breaks
+    foreach ($t in $doc.Tables) {{
+        try {{
+            $t.Rows.AllowBreakAcrossPages = 0
+        }} catch {{}}
+    }}
+
+    # Ensure headings stay with their content
+    foreach ($p in $doc.Paragraphs) {{
+        if ($p.OutlineLevel -ge 1 -and $p.OutlineLevel -le 4) {{
+            $p.Format.KeepWithNext = $true
+        }}
+    }}
 
     # Save as DOCX (16 = wdFormatXMLDocument)
     $doc.SaveAs([ref]$docxPath, [ref]16)

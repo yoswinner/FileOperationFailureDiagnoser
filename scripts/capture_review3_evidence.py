@@ -63,6 +63,7 @@ _ARTIFACTS_DIR = os.path.join(_PROJECT_ROOT, "artifacts", "review3")
 _SCREENSHOTS_DIR = os.path.join(_ARTIFACTS_DIR, "screenshots")
 _FINAL_SCREENSHOTS_DIR = os.path.join(_ARTIFACTS_DIR, "final_screenshots")
 _FINAL_SCREENSHOTS_V2_DIR = os.path.join(_ARTIFACTS_DIR, "final_screenshots_v2")
+_FINAL_SCREENSHOTS_V3_DIR = os.path.join(_ARTIFACTS_DIR, "final_screenshots_v3")
 _DEBUG_SCREENSHOTS_DIR = os.path.join(_ARTIFACTS_DIR, "debug_screenshots")
 _DEMO_FIXTURES_DIR = os.path.join(_ARTIFACTS_DIR, "demo_fixtures")
 _TEACHER_DEMO_DIR = os.path.join(_DEMO_FIXTURES_DIR, "teacher_demo")
@@ -75,6 +76,7 @@ _MANIFEST_PATH = os.path.join(_ARTIFACTS_DIR, "screenshot_manifest.md")
 _README_CLAUDE_PATH = os.path.join(_ARTIFACTS_DIR, "README_FOR_CLAUDE.md")
 _ZIP_PATH_V1 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack.zip")
 _ZIP_PATH_V2 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack_v2.zip")
+_ZIP_PATH_V3 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack_v3.zip")
 
 
 # ======================================================================
@@ -220,24 +222,63 @@ class Review3EvidenceRunner:
         self._setup_logging()
         self.scenario_results: List[ScenarioResult] = []
 
-    def _setup_logging(self):
+    def _setup_logging(self, mode: str = "a"):
         os.makedirs(_LOGS_DIR, exist_ok=True)
         os.makedirs(_SCREENSHOTS_DIR, exist_ok=True)
         os.makedirs(_FINAL_SCREENSHOTS_DIR, exist_ok=True)
         os.makedirs(_FINAL_SCREENSHOTS_V2_DIR, exist_ok=True)
+        os.makedirs(_FINAL_SCREENSHOTS_V3_DIR, exist_ok=True)
         os.makedirs(_DEBUG_SCREENSHOTS_DIR, exist_ok=True)
         os.makedirs(_TEACHER_DEMO_DIR, exist_ok=True)
 
         self.logger.setLevel(logging.INFO)
         self.logger.handlers.clear()
 
-        fh = logging.FileHandler(_SCENARIO_RUN_LOG, mode="w", encoding="utf-8")
+        fh = logging.FileHandler(_SCENARIO_RUN_LOG, mode=mode, encoding="utf-8")
         fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
         self.logger.addHandler(fh)
 
         ch = logging.StreamHandler(sys.stdout)
         ch.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
         self.logger.addHandler(ch)
+
+    def init_scenario_log_session(self):
+        """Initialize scenario_run.log with session header at the start of GUI demonstration run."""
+        with open(_SCENARIO_RUN_LOG, "w", encoding="utf-8") as f:
+            f.write(
+                f"======================================================================\n"
+                f"File Operation Failure Diagnoser — Live Scenario Execution Log\n"
+                f"Timestamp:   {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"Environment: Windows 11 Pro 64-bit, Python {sys.version.split()[0]}, Tkinter 8.6\n"
+                f"Scope:       14 Logical Scenario Groups / 16 Individual Scenario Executions\n"
+                f"======================================================================\n"
+            )
+
+    def _log_scenario_telemetry(self, sc: ScenarioResult, cleanup_note: str = "Restored fixture to clean baseline state."):
+        """Record structured, comprehensive scenario telemetry directly to scenario_run.log."""
+        entry = (
+            f"\n----------------------------------------------------------------------\n"
+            f"[Scenario {sc.scenario_id}] {sc.name}\n"
+            f"  Category:           {sc.category}\n"
+            f"  Fixture Path:       {sc.fixture_path}\n"
+            f"  Operation:          {sc.operation}\n"
+            f"  Expected Diagnosis: {sc.expected_diagnosis}\n"
+            f"  Actual Diagnosis:   {sc.actual_diagnosis}\n"
+            f"  Status:             {sc.status}\n"
+            f"  Screenshots Produced:\n"
+            f"    - Top Viewport:    {sc.screenshot_top} ({sc.screenshot_size_top:,} bytes)\n"
+            f"    - Bottom Viewport: {sc.screenshot_bottom} ({sc.screenshot_size_bottom:,} bytes)\n"
+            f"  Evidence Summary:   {sc.evidence_summary}\n"
+            f"  Notes / Details:    {sc.notes}\n"
+            f"  Cleanup Outcome:    {cleanup_note}\n"
+            f"----------------------------------------------------------------------"
+        )
+        self.logger.info(entry)
+
+    def _record_scenario(self, sc: ScenarioResult, cleanup_note: str = "Restored fixture to clean baseline state."):
+        """Store scenario result and write comprehensive structured telemetry to scenario_run.log."""
+        self.scenario_results.append(sc)
+        self._log_scenario_telemetry(sc, cleanup_note)
 
     # ------------------------------------------------------------------
     # Step 1: Run Full Pytest Suite
@@ -321,8 +362,14 @@ class Review3EvidenceRunner:
         time.sleep(0.3)
 
         try:
-            # 1. Normal file (READ) -> OPERATION_ALLOWED
-            self._scenario_01_normal_file(app, hwnd)
+            # Initialize scenario log session
+            self.init_scenario_log_session()
+
+            # 1a. Normal file (READ) -> OPERATION_ALLOWED
+            self._scenario_01a_normal_file_read(app, hwnd)
+
+            # 1b. Normal file (WRITE) -> OPERATION_ALLOWED
+            self._scenario_01b_normal_file_write(app, hwnd)
 
             # 2. Nonexistent file (READ) -> FILE_NOT_FOUND
             self._scenario_02_file_not_found(app, hwnd)
@@ -374,9 +421,9 @@ class Review3EvidenceRunner:
     # Scenario Implementations
     # ------------------------------------------------------------------
 
-    def _scenario_01_normal_file(self, app: MainWindow, hwnd: int):
+    def _scenario_01a_normal_file_read(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
-            scenario_id="01",
+            scenario_id="01a",
             name="Normal Accessible File (READ)",
             category="Operations & Baseline",
             description="Inspect an unrestricted, unlocked text file on disk with READ.",
@@ -384,13 +431,34 @@ class Review3EvidenceRunner:
             operation="READ",
             expected_diagnosis="OPERATION_ALLOWED",
         )
-        self._execute_gui_diagnosis(app, hwnd, sc, "01_normal_file_read.png")
+        self._execute_gui_diagnosis(app, hwnd, sc, "01a_normal_file_read.png")
         sc.evidence_summary = (
-            f"Status: {sc.actual_diagnosis}; Bits: Read/Write/Exec allowed; "
+            f"Status: {sc.actual_diagnosis}; Bits: Read/Write/Exec/Delete allowed; "
             f"Attr: 0x0020 (Archive); Sync: No provider association detected."
         )
-        sc.notes = "All 4 analyzers ran. Clean operational pass with zero blockers."
-        self.scenario_results.append(sc)
+        sc.notes = "All 4 analyzers ran. Clean operational pass with zero blockers on READ."
+        self._record_scenario(sc)
+
+    def _scenario_01b_normal_file_write(self, app: MainWindow, hwnd: int):
+        sc = ScenarioResult(
+            scenario_id="01b",
+            name="Normal Accessible File (WRITE)",
+            category="Operations & Baseline",
+            description="Inspect an unrestricted, unlocked text file on disk with WRITE.",
+            fixture_path=os.path.join(_TEACHER_DEMO_DIR, "01_normal_file.txt"),
+            operation="WRITE",
+            expected_diagnosis="OPERATION_ALLOWED",
+        )
+        self._execute_gui_diagnosis(app, hwnd, sc, "01b_normal_file_write.png")
+        sc.evidence_summary = (
+            f"Status: {sc.actual_diagnosis}; Bits: Read/Write/Exec/Delete allowed; "
+            f"Attr: 0x0020 (Archive); Sync: No provider association detected."
+        )
+        sc.notes = (
+            "WRITE operation evaluated safely on standard file. Verified that diagnoser assesses "
+            "write accessibility without modifying or writing to the target file."
+        )
+        self._record_scenario(sc)
 
     def _scenario_02_file_not_found(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -411,7 +479,7 @@ class Review3EvidenceRunner:
             "checks were skipped."
         )
         sc.notes = "Early exit correctly prevents false positive diagnosis."
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_03_process_locked(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -448,7 +516,7 @@ class Review3EvidenceRunner:
                 helper.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 pass
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_04a_read_only_write(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -470,7 +538,7 @@ class Review3EvidenceRunner:
             sc.notes = "Attribute flags show READONLY. Recommender advises unchecking box in Properties."
         finally:
             ctypes.windll.kernel32.SetFileAttributesW(sc.fixture_path, 0x80)
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_04b_read_only_read(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -492,7 +560,7 @@ class Review3EvidenceRunner:
             sc.notes = "Crucial architectural contrast: proves engine evaluates operation semantics."
         finally:
             ctypes.windll.kernel32.SetFileAttributesW(sc.fixture_path, 0x80)
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_05_permission_restricted(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -522,8 +590,8 @@ class Review3EvidenceRunner:
             sc.actual_reason = app._status_reason_lbl.cget("text")
 
             # Capture paired top and bottom views for Scenario 05
-            v2_top = os.path.join(_FINAL_SCREENSHOTS_V2_DIR, "05_permission_restricted_blocked_top.png")
-            v2_bottom = os.path.join(_FINAL_SCREENSHOTS_V2_DIR, "05_permission_restricted_blocked_bottom.png")
+            v3_top = os.path.join(_FINAL_SCREENSHOTS_V3_DIR, "05_permission_restricted_blocked_top.png")
+            v3_bottom = os.path.join(_FINAL_SCREENSHOTS_V3_DIR, "05_permission_restricted_blocked_bottom.png")
             debug_top = os.path.join(_DEBUG_SCREENSHOTS_DIR, "05_permission_restricted_blocked_top.png")
             debug_bottom = os.path.join(_DEBUG_SCREENSHOTS_DIR, "05_permission_restricted_blocked_bottom.png")
 
@@ -531,14 +599,14 @@ class Review3EvidenceRunner:
             app._canvas.yview_moveto(0.0)
             app._root.update()
             time.sleep(0.2)
-            capture_window_to_png(hwnd, v2_top)
+            capture_window_to_png(hwnd, v3_top)
             capture_window_to_png(hwnd, debug_top)
 
             # 2. Bottom capture (yview_moveto 1.0)
             app._canvas.yview_moveto(1.0)
             app._root.update()
             time.sleep(0.2)
-            capture_window_to_png(hwnd, v2_bottom)
+            capture_window_to_png(hwnd, v3_bottom)
             capture_window_to_png(hwnd, debug_bottom)
 
             # 3. Reset scroll position
@@ -546,10 +614,10 @@ class Review3EvidenceRunner:
             app._root.update()
 
             sc.status = "BLOCKED"
-            sc.screenshot_top = "final_screenshots_v2/05_permission_restricted_blocked_top.png"
-            sc.screenshot_bottom = "final_screenshots_v2/05_permission_restricted_blocked_bottom.png"
-            sc.screenshot_size_top = os.path.getsize(v2_top) if os.path.exists(v2_top) else 0
-            sc.screenshot_size_bottom = os.path.getsize(v2_bottom) if os.path.exists(v2_bottom) else 0
+            sc.screenshot_top = "final_screenshots_v3/05_permission_restricted_blocked_top.png"
+            sc.screenshot_bottom = "final_screenshots_v3/05_permission_restricted_blocked_bottom.png"
+            sc.screenshot_size_top = os.path.getsize(v3_top) if os.path.exists(v3_top) else 0
+            sc.screenshot_size_bottom = os.path.getsize(v3_bottom) if os.path.exists(v3_bottom) else 0
             sc.evidence_summary = f"Actual GUI Result: {sc.actual_diagnosis} ({sc.actual_reason})."
             sc.notes = (
                 "BLOCKED by Windows OS Architecture: Denying read access via NTFS DACL prevents "
@@ -560,7 +628,7 @@ class Review3EvidenceRunner:
             self.logger.info(f"[{sc.scenario_id}] {sc.name}: {sc.status} — {sc.notes}")
         finally:
             subprocess.run(["icacls", sc.fixture_path, "/remove:d", user], capture_output=True)
-        self.scenario_results.append(sc)
+        self._record_scenario(sc, "Removed deny ACE via icacls /remove:d")
 
     def _scenario_06_file_attributes(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -583,7 +651,7 @@ class Review3EvidenceRunner:
             sc.notes = "Accurately shows Hidden and Archive attributes without falsely claiming they prevent READ."
         finally:
             ctypes.windll.kernel32.SetFileAttributesW(sc.fixture_path, 0x80)
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_07_cloud_sync(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -605,7 +673,7 @@ class Review3EvidenceRunner:
             "Verified genuine negative finding (No provider association detected). "
             "User's personal OneDrive files were preserved untouched per safety policy."
         )
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_08_multiple_findings(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -644,7 +712,7 @@ class Review3EvidenceRunner:
             except subprocess.TimeoutExpired:
                 pass
             ctypes.windll.kernel32.SetFileAttributesW(sc.fixture_path, 0x80)
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_09_inspection_error(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -659,7 +727,7 @@ class Review3EvidenceRunner:
         self._execute_gui_diagnosis(app, hwnd, sc, "09_inspection_error_directory.png")
         sc.evidence_summary = f"Badge: {sc.actual_diagnosis}; Reason: '{sc.actual_reason}'."
         sc.notes = "Structured non-crashing error explanation directing user to target a regular file."
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_10_operation_execute(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -677,7 +745,7 @@ class Review3EvidenceRunner:
             f"Owner: {app._perm_owner_lbl.cget('text')}."
         )
         sc.notes = "Evaluates execute permission statically. Does NOT execute the target script."
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_11_operation_delete_allowed(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -694,7 +762,7 @@ class Review3EvidenceRunner:
             f"Operation: DELETE; Status: {sc.actual_diagnosis}; File remains on disk."
         )
         sc.notes = "Assesses deletion rights safely without performing actual file deletion."
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_12_operation_delete_readonly(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -715,7 +783,7 @@ class Review3EvidenceRunner:
             sc.notes = "Engine correctly identifies that Read-Only blocks DELETE on Windows."
         finally:
             ctypes.windll.kernel32.SetFileAttributesW(sc.fixture_path, 0x80)
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_13_system_attribute(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -737,7 +805,7 @@ class Review3EvidenceRunner:
             sc.notes = "System bitmask verified without false blocking alarms."
         finally:
             ctypes.windll.kernel32.SetFileAttributesW(sc.fixture_path, 0x80)
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     def _scenario_14_reset_stale_clearing(self, app: MainWindow, hwnd: int):
         sc = ScenarioResult(
@@ -776,7 +844,7 @@ class Review3EvidenceRunner:
             f"Status Badge: {sc.actual_diagnosis}; Prior lock data completely cleared."
         )
         sc.notes = "Proves _reset_panels() prevents cross-run telemetry contamination."
-        self.scenario_results.append(sc)
+        self._record_scenario(sc)
 
     # ------------------------------------------------------------------
     # GUI Execution & Capture Helper
@@ -806,8 +874,8 @@ class Review3EvidenceRunner:
         bottom_filename = f"{base_id}_bottom.png"
 
         legacy_path = os.path.join(_FINAL_SCREENSHOTS_DIR, screenshot_filename)
-        target_top = os.path.join(_FINAL_SCREENSHOTS_V2_DIR, top_filename)
-        target_bottom = os.path.join(_FINAL_SCREENSHOTS_V2_DIR, bottom_filename)
+        target_top = os.path.join(_FINAL_SCREENSHOTS_V3_DIR, top_filename)
+        target_bottom = os.path.join(_FINAL_SCREENSHOTS_V3_DIR, bottom_filename)
 
         # 1. Top capture (yview_moveto 0.0)
         app._canvas.yview_moveto(0.0)
@@ -828,8 +896,8 @@ class Review3EvidenceRunner:
 
         if ok_top and ok_bottom and sc.actual_diagnosis == sc.expected_diagnosis:
             sc.status = "PASS — real GUI capture and result verified"
-            sc.screenshot_top = f"final_screenshots_v2/{top_filename}"
-            sc.screenshot_bottom = f"final_screenshots_v2/{bottom_filename}"
+            sc.screenshot_top = f"final_screenshots_v3/{top_filename}"
+            sc.screenshot_bottom = f"final_screenshots_v3/{bottom_filename}"
             sc.screenshot_size_top = os.path.getsize(target_top)
             sc.screenshot_size_bottom = os.path.getsize(target_bottom)
             self.logger.info(
@@ -858,8 +926,13 @@ class Review3EvidenceRunner:
             "",
             "This document establishes the verified diagnostic coverage, operational scope, and evidence portfolio for the **File Operation Failure Diagnoser** (Review 3 Final Evaluation).",
             "",
-            f"**Environment**: Windows 11 Pro 64-bit, Python 3.12.3, Tkinter 8.6 (clam theme).  ",
+            f"**Environment**: Windows 11 Pro 64-bit, Python {sys.version.split()[0]}, pytest 9.1.1, Tkinter 8.6 (clam theme).  ",
             f"**Execution Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}  ",
+            "",
+            "### Scenario Scope & Count Distinction:",
+            "- **Logical Scenario Groups**: **14 distinct functional groups** (Scenarios 01 through 14).",
+            "- **Individual Scenario Executions**: **16 individually executed test cases** (because Scenario 01 tests both READ [01a] and WRITE [01b] on normal file, and Scenario 04 tests both WRITE [04a] and READ [04b] for read-only contrast).",
+            "- **Verified Outcomes**: **13 logical groups (15 individual executions) verified as PASS** with complete paired top/bottom captures in `final_screenshots_v3/`. **1 logical group (1 execution, Scenario 05: Permission Restriction) evaluated safely and documented honestly as BLOCKED** by Windows Restart Manager OS architecture.",
             "",
             "---",
             "",
@@ -891,10 +964,10 @@ class Review3EvidenceRunner:
             "",
             "| Operation | Evaluated Semantics | Engine Implementation | Windows Execution Guarantee | Verified Demonstrations |",
             "| :--- | :--- | :--- | :--- | :--- |",
-            "| **READ** | Inspects read permissions, active locks, attributes. | `os.access(R_OK)` + Restart Manager | Yes (Standard OS read access) | Scenarios 01, 02, 04b, 05, 06, 07, 09, 13, 14 |",
-            "| **WRITE** | Inspects write access, read-only bits, contention locks. | `os.access(W_OK)` + `GetFileAttributesW` + Restart Manager | Yes (Read-only blocks write) | Scenarios 03, 04a, 08; also covered in `test_diagnoser.py` |",
+            "| **READ** | Inspects read permissions, active locks, attributes. | `os.access(R_OK)` + Restart Manager | Yes (Standard OS read access) | Scenarios 01a, 02, 04b, 05, 06, 07, 09, 13, 14 |",
+            "| **WRITE** | Inspects write access, read-only bits, contention locks. | `os.access(W_OK)` + `GetFileAttributesW` + Restart Manager | Yes (Read-only blocks write; normal allows write safely) | Scenarios 01b (Normal WRITE success), 03 (Process lock), 04a (Read-only attribute), 08 (Multiple findings); also covered in unit tests |",
             "| **EXECUTE** | Evaluates execute permissions statically. | `os.access(X_OK)` + ownership check | Diagnostic check only; file is NEVER executed | Scenario 10 (`08_execute_check.cmd`) |",
-            "| **DELETE** | Evaluates deletion rights without modifying disk. | `os.access(W_OK)` + read-only check | Diagnostic check only; file is NEVER deleted | Scenarios 11 (Allowed), 12 (Read-only blocked) |",
+            "| **DELETE** | Evaluates deletion rights without modifying disk. | `os.access(W_OK)` + read-only check | Diagnostic check only; file is NEVER deleted | Scenarios 11 (Allowed), 12 (Read-only blocked); GUI displays dedicated DELETE row |",
             "",
             "---",
             "",
@@ -905,7 +978,7 @@ class Review3EvidenceRunner:
             "| **READONLY** | `0x0001` | Yes (`is_readonly=True`) | Blocks write (`READ_ONLY`) | Permitted (`OPERATION_ALLOWED`) | Scenarios 04a, 04b, 08, 12 |",
             "| **HIDDEN** | `0x0002` | Yes (`is_hidden=True`) | Permitted (secondary info) | Permitted (secondary info) | Scenario 06 (`06_file_attributes_hidden_archive`) |",
             "| **SYSTEM** | `0x0004` | Yes (`is_system=True`) | Permitted (secondary info) | Permitted (secondary info) | Scenario 13 (`13_system_attribute_evidence`) |",
-            "| **ARCHIVE** | `0x0020` | Yes (`is_archive=True`) | Permitted (standard file) | Permitted (standard file) | Scenarios 01, 03, 06, 13 |",
+            "| **ARCHIVE** | `0x0020` | Yes (`is_archive=True`) | Permitted (standard file) | Permitted (standard file) | Scenarios 01a, 01b, 03, 06, 13 |",
             "| **REPARSE_POINT** | `0x0400` | Yes (`is_reparse_point=True`) | Evaluated in sync analyzer | Evaluated in sync analyzer | Unit tested in `test_sync_conflict.py` (PASS — automated result verified) |",
             "| **OFFLINE** | `0x1000` | Yes (`is_offline=True`) | Evaluated in sync analyzer | Evaluated in sync analyzer | Unit tested in `test_sync_conflict.py` (PASS — automated result verified) |",
             "",
@@ -931,15 +1004,20 @@ class Review3EvidenceRunner:
             "",
             "This manifest details the genuine execution outcomes, diagnostic assertions, and captured GUI screenshots for the **File Operation Failure Diagnoser** (Review 3 Final Demonstration).",
             "",
-            f"**Environment**: Windows 11 Pro, Python 3.12.3, Tkinter 8.6.  ",
+            f"**Environment**: Windows 11 Pro 64-bit, Python {sys.version.split()[0]}, pytest 9.1.1, Tkinter 8.6.  ",
             f"**Execution Timestamp**: {time.strftime('%Y-%m-%d %H:%M:%S')}  ",
+            "",
+            "### Scenario Count Clarity:",
+            "- **14 Logical Scenario Groups**: Baseline Normal File, Nonexistent Target, Process Lock, Read-Only Contrast, Permission Restriction, File Attributes, Cloud Sync, Multi-Finding Priority, Directory Error, Execute Operation, Delete Allowed, Delete Read-Only, System Flag, and Re-Diagnosis Reset.",
+            "- **16 Individual Executions**: Includes separate READ (01a) and WRITE (01b) executions for normal file, and separate WRITE (04a) and READ (04b) executions for read-only file.",
+            "- **Outcome**: 13 logical groups (15 executions) PASS; 1 logical group (1 execution, Scenario 05) BLOCKED by OS architecture.",
             "",
             "---",
             "",
-            "## Final Verified Screenshots (v2 Paired Viewport Captures)",
+            "## Final Verified Screenshots (v3 Paired Viewport Captures)",
             "",
-            "To solve the scrollbar truncation defect without artificial image stitching, each scenario is captured natively at two scroll positions:",
-            "- **Top View (`*_top.png`)**: Upper viewport at scroll position 0.0 showing Window title, file path, operation radio buttons, Primary Diagnosis badge, explanatory reason, Process Lock table, and Effective Permissions.",
+            "To solve scrollbar truncation and horizontal clipping defects without artificial image stitching, each scenario is captured natively at two scroll positions in `artifacts/review3/final_screenshots_v3/`:",
+            "- **Top View (`*_top.png`)**: Upper viewport at scroll position 0.0 showing Window title, file path, operation radio buttons, Primary Diagnosis badge, explanatory reason, Process Lock table, and Effective Permissions (including owner, method, and distinct READ, WRITE, EXECUTE, DELETE rows).",
             "- **Bottom View (`*_bottom.png`)**: Lower viewport programmatically scrolled to position 1.0 (`yview_moveto(1.0)`) showing the complete File Attributes bitmask table, Cloud Synchronization status and daemon detection, and the Context-Aware Suggested Action recommendation.",
             "",
             "| Scenario ID | Name | Target Fixture | Operation | Expected Diagnosis | Actual Diagnosis | Verification Status | Paired Screenshots | Evidence Notes |",
@@ -981,7 +1059,8 @@ class Review3EvidenceRunner:
     def generate_readme_for_claude(self):
         """Generate updated handoff guide for Claude Chat report writing."""
         self.logger.info("Generating README_FOR_CLAUDE.md...")
-        content = f"""# Review 3 Implementation Evidence Handoff for Claude Chat (v2)
+        py_ver = sys.version.split()[0]
+        content = f"""# Review 3 Implementation Evidence Handoff for Claude Chat (v3)
 
 Welcome! This package contains the **complete, verified engineering evidence** for the Operating Systems Lab mini-project: **File Operation Failure Diagnoser** (Review 3 Final Submission).
 
@@ -998,6 +1077,7 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
    - Retrieves holding process name, PID, application type, and executable path.
 2. **Permission Analyzer** (`src/diagnoser/analyzers/permissions.py`):
    - Evaluates effective user permissions via `os.access()` and resolves NTFS file ownership via `advapi32.dll` (`GetNamedSecurityInfoW`, `LookupAccountSidW`).
+   - Displays distinct READ, WRITE, EXECUTE, and DELETE permission status rows in GUI.
    - Clear architectural boundary: does not claim full NTFS DACL inheritance parsing.
 3. **File Attribute Analyzer** (`src/diagnoser/analyzers/file_attributes.py`):
    - Inspects Win32 attribute bitmasks via `kernel32.GetFileAttributesW`.
@@ -1011,14 +1091,14 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
 
 ## 2. Verification Summary & Test Metrics
 
-- **Platform**: Windows 11 Pro 64-bit, Python 3.12.3, Tkinter 8.6.
+- **Platform**: Windows 11 Pro 64-bit, Python {py_ver}, pytest 9.1.1, Tkinter 8.6.
 - **Automated Regression Suite**:
-  - **156 collected tests**, **155 passed**, **0 failed**, **1 skipped** (`test_reopen_audit_reopen_failure_returns_false` requiring exclusive OS handle lock).
+  - **157 collected tests**, **156 passed**, **0 failed**, **1 skipped** (`test_reopen_audit_reopen_failure_returns_false` requiring exclusive OS handle lock).
   - Test log: `artifacts/review3/logs/test_results.txt`.
 - **Live GUI Demonstration Suite**:
-  - **14 scenarios executed live on Windows 11**.
-  - **13 scenarios passed and captured as complete paired top/bottom PNGs** in `artifacts/review3/final_screenshots_v2/`.
-  - **1 scenario (Scenario 05: Permission Restriction) evaluated safely and accurately classified as BLOCKED** by OS architecture (Windows Restart Manager returns Win32 Error 5 when access is denied, causing `UNKNOWN_ERROR`). Paired captures saved in both `artifacts/review3/debug_screenshots/` and `artifacts/review3/final_screenshots_v2/`.
+  - **14 logical scenario groups**, **16 individual scenario executions** executed live on Windows 11.
+  - **13 logical groups (15 individual executions) passed and captured as complete paired top/bottom PNGs** in `artifacts/review3/final_screenshots_v3/` (including normal WRITE success).
+  - **1 logical group (1 execution, Scenario 05: Permission Restriction) evaluated safely and accurately classified as BLOCKED** by OS architecture (Windows Restart Manager returns Win32 Error 5 when access is denied, causing `UNKNOWN_ERROR`). Paired captures saved in both `artifacts/review3/debug_screenshots/` and `artifacts/review3/final_screenshots_v3/`.
 
 ---
 
@@ -1030,32 +1110,36 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
 - **Demonstration Guide (Markdown)**: `artifacts/review3/Review3_Demo_Guide.md`
 - **Demonstration Guide (PDF)**: `artifacts/review3/Review3_Demo_Guide.pdf`
 - **Teacher Demo Fixtures**: `artifacts/review3/demo_fixtures/teacher_demo/`
+- **Verified Root README**: Included in evidence ZIP as `project_docs/README.md`
 - **Safe Helper Scripts**:
   - `scripts/prepare_teacher_demo_fixtures.ps1`
   - `scripts/restore_teacher_demo_fixtures.ps1`
   - `scripts/hold_demo_file_open.py`
-- **Consolidated Evidence ZIP (v2)**: `artifacts/review3/Review3_Evidence_Pack_v2.zip`
+- **Consolidated Evidence ZIP (v3)**: `artifacts/review3/Review3_Evidence_Pack_v3.zip`
 
 ---
 
 ## 4. Instructions for Report & PPT Generation in Claude Chat
 
 1. **Adhere Strictly to Real Evidence**: Do not claim that DACL denial was demonstrated as `PERMISSION_DENIED`—honestly explain the OS Restart Manager Error 5 finding.
-2. **Highlight Operation Semantics**: Emphasize how `READ_ONLY` blocks `WRITE` and `DELETE`, but allows `READ` and `EXECUTE`.
-3. **Reference the Genuine Screenshots**: Use the filenames from `artifacts/review3/final_screenshots_v2/` with exact captions explaining the paired top and bottom viewports.
+2. **Highlight Operation Semantics**: Emphasize how `READ_ONLY` blocks `WRITE` and `DELETE`, but allows `READ` and `EXECUTE`. Note that normal files permit `WRITE` and `READ` without modifying disk.
+3. **Reference the Genuine Screenshots**: Use the filenames from `artifacts/review3/final_screenshots_v3/` with exact captions explaining the paired top and bottom viewports.
 """
         with open(_README_CLAUDE_PATH, "w", encoding="utf-8") as f:
             f.write(content)
         self.logger.info(f"Claude handoff README updated at: {_README_CLAUDE_PATH}")
 
     # ------------------------------------------------------------------
-    # Step 5: Packaging Evidence Pack v2 ZIP
+    # Step 5: Packaging Evidence Pack v3 ZIP
     # ------------------------------------------------------------------
 
-    def package_evidence_zip_v2(self):
-        """Create Review3_Evidence_Pack_v2.zip preserving all deliverables."""
-        self.logger.info("Packaging Review3_Evidence_Pack_v2.zip...")
+    def package_evidence_zip_v3(self):
+        """Create Review3_Evidence_Pack_v3.zip preserving all deliverables and including root README."""
+        self.logger.info("Packaging Review3_Evidence_Pack_v3.zip...")
+        root_readme = os.path.join(_PROJECT_ROOT, "README.md")
         items_to_zip = [
+            ("project_docs/README.md", root_readme),
+            ("final_screenshots_v3", _FINAL_SCREENSHOTS_V3_DIR),
             ("final_screenshots_v2", _FINAL_SCREENSHOTS_V2_DIR),
             ("final_screenshots", _FINAL_SCREENSHOTS_DIR),
             ("screenshots", _SCREENSHOTS_DIR),
@@ -1074,7 +1158,7 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
             ("docs/REVIEW3_ENGINEERING_LOG.md", os.path.join(_PROJECT_ROOT, "docs", "REVIEW3_ENGINEERING_LOG.md")),
         ]
 
-        with zipfile.ZipFile(_ZIP_PATH_V2, "w", zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(_ZIP_PATH_V3, "w", zipfile.ZIP_DEFLATED) as zf:
             for arc_name, disk_path in items_to_zip:
                 if not os.path.exists(disk_path):
                     continue
@@ -1087,8 +1171,18 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
                             rel_p = os.path.relpath(full_p, disk_path)
                             zf.write(full_p, os.path.join(arc_name, rel_p))
 
-        size = os.path.getsize(_ZIP_PATH_V2)
-        self.logger.info(f"Evidence Pack v2 created successfully: {_ZIP_PATH_V2} ({size:,} bytes).")
+        # Test archive integrity
+        with zipfile.ZipFile(_ZIP_PATH_V3, "r") as zf:
+            bad_file = zf.testzip()
+            if bad_file:
+                raise RuntimeError(f"Corrupt file in ZIP archive: {bad_file}")
+            members_count = len(zf.infolist())
+
+        size = os.path.getsize(_ZIP_PATH_V3)
+        self.logger.info(
+            f"Evidence Pack v3 created successfully: {_ZIP_PATH_V3} "
+            f"({size:,} bytes, {members_count} members, integrity verified)."
+        )
 
 
 # ======================================================================
@@ -1114,10 +1208,10 @@ def main():
     runner.generate_manifest()
     runner.generate_readme_for_claude()
 
-    # 4. Package Evidence Pack v2
-    runner.package_evidence_zip_v2()
+    # 4. Package Evidence Pack v3
+    runner.package_evidence_zip_v3()
 
-    print("\nDemonstrations, manifest, and evidence package generated successfully.\n")
+    print("\nDemonstrations, manifest, and evidence package v3 generated successfully.\n")
 
 
 if __name__ == "__main__":

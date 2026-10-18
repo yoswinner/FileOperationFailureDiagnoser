@@ -87,7 +87,7 @@ class TestMainWindowIntegration:
                 permitted=True,
                 owner=r"DOMAIN\User",
                 current_user="User",
-                permission_bits={"read": True, "write": True, "execute": False},
+                permission_bits={"read": True, "write": True, "execute": False, "delete": True},
                 detection_method="windows_acl",
             ),
             attribute_result=FileAttributeResult(
@@ -133,7 +133,7 @@ class TestMainWindowIntegration:
 
         # Permissions
         assert tk_window._perm_owner_lbl.cget("text") == r"DOMAIN\User"
-        assert len(tk_window._perm_bits_frame.winfo_children()) == 3
+        assert len(tk_window._perm_bits_frame.winfo_children()) == 4
 
         # Attributes
         assert "0x0020" in tk_window._attr_raw_lbl.cget("text")
@@ -613,3 +613,62 @@ class TestMainWindowIntegration:
             tk_window._run_diagnosis()
             mock_warn.assert_called_once()
             tk_window._engine.diagnose.assert_not_called()
+
+    def test_17_permission_panel_displays_delete_row_with_backend_value(self, tk_window):
+        """Scenario 17: Permission panel renders DELETE row distinguishing Allowed, Denied, and Unknown."""
+        # 1. Allowed DELETE
+        res_allowed = DiagnosisResult(
+            file_path=r"C:\test\sample.txt",
+            operation="read",
+            diagnosis=DiagnosisType.OPERATION_ALLOWED,
+            permission_result=PermissionCheckResult(
+                file_path=r"C:\test\sample.txt",
+                operation="read",
+                permitted=True,
+                permission_bits={"read": True, "write": True, "execute": True, "delete": True},
+            ),
+        )
+        tk_window._update_permissions(res_allowed)
+        rows = tk_window._perm_bits_frame.winfo_children()
+        del_row = [r for r in rows if "DELETE" in r.winfo_children()[0].cget("text")]
+        assert len(del_row) == 1
+        assert "✓" in del_row[0].winfo_children()[0].cget("text")
+        assert "Allowed" in del_row[0].winfo_children()[1].cget("text")
+
+        # 2. Denied DELETE
+        res_denied = DiagnosisResult(
+            file_path=r"C:\test\sample.txt",
+            operation="read",
+            diagnosis=DiagnosisType.READ_ONLY,
+            permission_result=PermissionCheckResult(
+                file_path=r"C:\test\sample.txt",
+                operation="read",
+                permitted=True,
+                permission_bits={"read": True, "write": False, "execute": True, "delete": False},
+            ),
+        )
+        tk_window._update_permissions(res_denied)
+        rows = tk_window._perm_bits_frame.winfo_children()
+        del_row = [r for r in rows if "DELETE" in r.winfo_children()[0].cget("text")]
+        assert len(del_row) == 1
+        assert "✗" in del_row[0].winfo_children()[0].cget("text")
+        assert "Denied" in del_row[0].winfo_children()[1].cget("text")
+
+        # 3. Unknown / Unverified DELETE when not in bits dict and operation is not delete
+        res_unknown = DiagnosisResult(
+            file_path=r"C:\test\sample.txt",
+            operation="read",
+            diagnosis=DiagnosisType.OPERATION_ALLOWED,
+            permission_result=PermissionCheckResult(
+                file_path=r"C:\test\sample.txt",
+                operation="read",
+                permitted=True,
+                permission_bits={"read": True, "write": True, "execute": True},
+            ),
+        )
+        tk_window._update_permissions(res_unknown)
+        rows = tk_window._perm_bits_frame.winfo_children()
+        del_row = [r for r in rows if "DELETE" in r.winfo_children()[0].cget("text")]
+        assert len(del_row) == 1
+        assert "?" in del_row[0].winfo_children()[0].cget("text")
+        assert "Unknown / Unverified" in del_row[0].winfo_children()[1].cget("text")
