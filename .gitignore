@@ -31,3 +31,6 @@ Thumbs.db
 
 # Microsoft Office temporary files
 ~$*
+
+# Local review artifacts and evidence packages
+artifacts/
