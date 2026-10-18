@@ -78,6 +78,7 @@ _ZIP_PATH_V1 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack.zip")
 _ZIP_PATH_V2 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack_v2.zip")
 _ZIP_PATH_V3 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack_v3.zip")
 _ZIP_PATH_V4 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack_v4.zip")
+_ZIP_PATH_V5 = os.path.join(_ARTIFACTS_DIR, "Review3_Evidence_Pack_v5.zip")
 
 
 # ======================================================================
@@ -1061,7 +1062,7 @@ class Review3EvidenceRunner:
         """Generate updated handoff guide for Claude Chat report writing."""
         self.logger.info("Generating README_FOR_CLAUDE.md...")
         py_ver = sys.version.split()[0]
-        content = f"""# Review 3 Implementation Evidence Handoff for Claude Chat (v4)
+        content = f"""# Review 3 Implementation Evidence Handoff for Claude Chat (v5)
 
 Welcome! This package contains the **complete, verified engineering evidence** for the Operating Systems Lab mini-project: **File Operation Failure Diagnoser** (Review 3 Final Submission).
 
@@ -1094,7 +1095,7 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
 
 - **Platform**: Windows 11 Pro 64-bit, Python {py_ver}, pytest 9.1.1, Tkinter 8.6.
 - **Automated Regression Suite**:
-  - **157 collected tests**, **156 passed**, **0 failed**, **1 skipped** (`test_reopen_audit_reopen_failure_returns_false` requiring exclusive OS handle lock).
+  - **157 collected tests**, **156 passed**, **0 failed**, **1 skipped** (`tests/test_process_lock.py::TestProcessLockAnalyzerCrossPlatform::test_unsupported_platform_message` — platform-specific test skipped on Windows).
   - Test log: `artifacts/review3/logs/test_results.txt`.
 - **Live GUI Demonstration Suite**:
   - **14 logical scenario groups**, **16 individual scenario executions** executed live on Windows 11.
@@ -1116,7 +1117,7 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
   - `scripts/prepare_teacher_demo_fixtures.ps1`
   - `scripts/restore_teacher_demo_fixtures.ps1`
   - `scripts/hold_demo_file_open.py`
-- **Consolidated Evidence ZIP (v4)**: `artifacts/review3/Review3_Evidence_Pack_v4.zip`
+- **Consolidated Evidence ZIP (v5)**: `artifacts/review3/Review3_Evidence_Pack_v5.zip` (historical archives v1 through v4 preserved)
 
 ---
 
@@ -1233,6 +1234,57 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
         size = os.path.getsize(_ZIP_PATH_V4)
         self.logger.info(
             f"Evidence Pack v4 created successfully: {_ZIP_PATH_V4} "
+            f"({size:,} bytes, {members_count} members, integrity verified)."
+        )
+
+    def package_evidence_zip_v5(self):
+        """Create Review3_Evidence_Pack_v5.zip preserving all deliverables and including root README."""
+        self.logger.info("Packaging Review3_Evidence_Pack_v5.zip...")
+        root_readme = os.path.join(_PROJECT_ROOT, "README.md")
+        items_to_zip = [
+            ("project_docs/README.md", root_readme),
+            ("final_screenshots_v3", _FINAL_SCREENSHOTS_V3_DIR),
+            ("final_screenshots_v2", _FINAL_SCREENSHOTS_V2_DIR),
+            ("final_screenshots", _FINAL_SCREENSHOTS_DIR),
+            ("screenshots", _SCREENSHOTS_DIR),
+            ("debug_screenshots", _DEBUG_SCREENSHOTS_DIR),
+            ("logs", _LOGS_DIR),
+            ("demo_fixtures/teacher_demo", _TEACHER_DEMO_DIR),
+            ("evidence_coverage_matrix.md", _COVERAGE_MATRIX_PATH),
+            ("screenshot_manifest.md", _MANIFEST_PATH),
+            ("README_FOR_CLAUDE.md", _README_CLAUDE_PATH),
+            ("Review3_Demo_Guide.md", os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.md")),
+            ("Review3_Demo_Guide.docx", os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.docx")),
+            ("Review3_Demo_Guide.pdf", os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.pdf")),
+            ("scripts/prepare_teacher_demo_fixtures.ps1", os.path.join(_PROJECT_ROOT, "scripts", "prepare_teacher_demo_fixtures.ps1")),
+            ("scripts/restore_teacher_demo_fixtures.ps1", os.path.join(_PROJECT_ROOT, "scripts", "restore_teacher_demo_fixtures.ps1")),
+            ("scripts/hold_demo_file_open.py", os.path.join(_PROJECT_ROOT, "scripts", "hold_demo_file_open.py")),
+            ("docs/REVIEW3_ENGINEERING_LOG.md", os.path.join(_PROJECT_ROOT, "docs", "REVIEW3_ENGINEERING_LOG.md")),
+        ]
+
+        with zipfile.ZipFile(_ZIP_PATH_V5, "w", zipfile.ZIP_DEFLATED) as zf:
+            for arc_name, disk_path in items_to_zip:
+                if not os.path.exists(disk_path):
+                    continue
+                if os.path.isfile(disk_path):
+                    zf.write(disk_path, arc_name)
+                elif os.path.isdir(disk_path):
+                    for root, _, files in os.walk(disk_path):
+                        for f in files:
+                            full_p = os.path.join(root, f)
+                            rel_p = os.path.relpath(full_p, disk_path)
+                            zf.write(full_p, os.path.join(arc_name, rel_p))
+
+        # Test archive integrity
+        with zipfile.ZipFile(_ZIP_PATH_V5, "r") as zf:
+            bad_file = zf.testzip()
+            if bad_file:
+                raise RuntimeError(f"Corrupt file in ZIP archive: {bad_file}")
+            members_count = len(zf.infolist())
+
+        size = os.path.getsize(_ZIP_PATH_V5)
+        self.logger.info(
+            f"Evidence Pack v5 created successfully: {_ZIP_PATH_V5} "
             f"({size:,} bytes, {members_count} members, integrity verified)."
         )
 

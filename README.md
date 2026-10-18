@@ -147,7 +147,7 @@ The diagnoser supports four diagnostic access evaluations via the `FileOperation
 
 ## 7. Technology Stack & API Reference
 
-- **Language & Runtime**: Python 3.12 (standard library + `ctypes`, `subprocess`, `dataclasses`, `enum`, `logging`)
+- **Language & Runtime**: Python 3.10+ supported (Python 3.13.14 verified for Review 3 final audit; standard library + `ctypes`, `subprocess`, `dataclasses`, `enum`, `logging`)
 - **Native Windows Dynamic Libraries**:
   - `rstrtmgr.dll`: [Restart Manager API](https://learn.microsoft.com/en-us/windows/win32/restartmanager/restart-manager-portal) (`RmStartSession`, `RmRegisterResources`, `RmGetList`, `RmEndSession`)
   - `kernel32.dll`: [GetFileAttributesW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileattributesw), [File Attribute Constants](https://learn.microsoft.com/en-us/windows/win32/fileio/file-attribute-constants)
@@ -163,7 +163,7 @@ The diagnoser supports four diagnostic access evaluations via the `FileOperation
 
 ### Prerequisites
 - Microsoft Windows 10 or Windows 11 (64-bit recommended)
-- Python 3.10+ (Python 3.12 verified)
+- Python 3.10+ supported (Python 3.13.14 verified for Review 3 final audit)
 
 ### Virtual Environment Setup
 From PowerShell in the project root directory:
@@ -217,7 +217,7 @@ $env:PYTHONDONTWRITEBYTECODE = "1"; .\venv\Scripts\python.exe -B -m pytest -p no
 - **Collected**: 157 test items
 - **Passed**: 156 tests passed (100% of runnable tests)
 - **Failed**: 0 failures
-- **Skipped**: 1 test (`test_reopen_audit_reopen_failure_returns_false` requiring exclusive OS handle lock)
+- **Skipped**: 1 test (`tests/test_process_lock.py::TestProcessLockAnalyzerCrossPlatform::test_unsupported_platform_message` — platform-specific test skipped on Windows)
 - **Raw Test Log**: `artifacts/review3/logs/test_results.txt`
 
 ---
@@ -265,8 +265,8 @@ All evidence deliverables are organized in `artifacts/review3/`:
 - **Teacher Demonstration Guide (PDF)**: `artifacts/review3/Review3_Demo_Guide.pdf` (20-page landscape PDF)
 - **Teacher Demonstration Guide (Markdown)**: `artifacts/review3/Review3_Demo_Guide.md`
 - **Claude Chat Report Handoff**: `artifacts/review3/README_FOR_CLAUDE.md`
-- **Consolidated Evidence ZIP (v4)**: `artifacts/review3/Review3_Evidence_Pack_v4.zip` (verified integrity, includes `project_docs/README.md`)
-- **Historical Evidence Archives Preserved**: `Review3_Evidence_Pack_v3.zip`, `Review3_Evidence_Pack_v2.zip`, `Review3_Evidence_Pack.zip`
+- **Consolidated Evidence ZIP (v5)**: `artifacts/review3/Review3_Evidence_Pack_v5.zip` (verified integrity, includes `project_docs/README.md`)
+- **Historical Evidence Archives Preserved**: `Review3_Evidence_Pack_v4.zip`, `Review3_Evidence_Pack_v3.zip`, `Review3_Evidence_Pack_v2.zip`, `Review3_Evidence_Pack.zip`
 
 ---
 
@@ -327,7 +327,7 @@ FileOperationFailureDiagnoser/
 │       ├── evidence_coverage_matrix.md   # Evidence mapping and scenario coverage
 │       ├── screenshot_manifest.md        # Screenshot deliverable manifest
 │       ├── README_FOR_CLAUDE.md          # Handoff notes for Claude Chat report writing
-│       └── Review3_Evidence_Pack_v3.zip  # Consolidated deliverable ZIP archive
+│       └── Review3_Evidence_Pack_v5.zip  # Consolidated deliverable ZIP archive (v5)
 ├── docs/
 │   └── REVIEW3_ENGINEERING_LOG.md        # Comprehensive milestone engineering log
 ├── README.md                             # Project overview and documentation
