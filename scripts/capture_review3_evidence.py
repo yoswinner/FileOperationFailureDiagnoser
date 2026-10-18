@@ -62,6 +62,7 @@ from diagnoser.models import DiagnosisType, FileOperation
 _ARTIFACTS_DIR = os.path.join(_PROJECT_ROOT, "artifacts", "review3")
 _SCREENSHOTS_DIR = os.path.join(_ARTIFACTS_DIR, "screenshots")
 _FINAL_SCREENSHOTS_DIR = os.path.join(_ARTIFACTS_DIR, "final_screenshots")
+_FINAL_SCREENSHOTS_V2_DIR = os.path.join(_ARTIFACTS_DIR, "final_screenshots_v2")
 _DEBUG_SCREENSHOTS_DIR = os.path.join(_ARTIFACTS_DIR, "debug_screenshots")
 _DEMO_FIXTURES_DIR = os.path.join(_ARTIFACTS_DIR, "demo_fixtures")
 _TEACHER_DEMO_DIR = os.path.join(_DEMO_FIXTURES_DIR, "teacher_demo")
@@ -199,8 +200,10 @@ class ScenarioResult:
     actual_diagnosis: str = ""
     actual_reason: str = ""
     status: str = "PENDING"
-    screenshot_file: str = ""
-    screenshot_size: int = 0
+    screenshot_top: str = ""
+    screenshot_bottom: str = ""
+    screenshot_size_top: int = 0
+    screenshot_size_bottom: int = 0
     evidence_summary: str = ""
     notes: str = ""
 
@@ -221,6 +224,7 @@ class Review3EvidenceRunner:
         os.makedirs(_LOGS_DIR, exist_ok=True)
         os.makedirs(_SCREENSHOTS_DIR, exist_ok=True)
         os.makedirs(_FINAL_SCREENSHOTS_DIR, exist_ok=True)
+        os.makedirs(_FINAL_SCREENSHOTS_V2_DIR, exist_ok=True)
         os.makedirs(_DEBUG_SCREENSHOTS_DIR, exist_ok=True)
         os.makedirs(_TEACHER_DEMO_DIR, exist_ok=True)
 
@@ -517,12 +521,35 @@ class Review3EvidenceRunner:
             sc.actual_diagnosis = actual_badge.split("  ")[-1].strip().replace(" ", "_")
             sc.actual_reason = app._status_reason_lbl.cget("text")
 
-            debug_cap = os.path.join(_DEBUG_SCREENSHOTS_DIR, "05_permission_restricted_blocked.png")
-            capture_window_to_png(hwnd, debug_cap)
+            # Capture paired top and bottom views for Scenario 05
+            v2_top = os.path.join(_FINAL_SCREENSHOTS_V2_DIR, "05_permission_restricted_blocked_top.png")
+            v2_bottom = os.path.join(_FINAL_SCREENSHOTS_V2_DIR, "05_permission_restricted_blocked_bottom.png")
+            debug_top = os.path.join(_DEBUG_SCREENSHOTS_DIR, "05_permission_restricted_blocked_top.png")
+            debug_bottom = os.path.join(_DEBUG_SCREENSHOTS_DIR, "05_permission_restricted_blocked_bottom.png")
+
+            # 1. Top capture (yview_moveto 0.0)
+            app._canvas.yview_moveto(0.0)
+            app._root.update()
+            time.sleep(0.2)
+            capture_window_to_png(hwnd, v2_top)
+            capture_window_to_png(hwnd, debug_top)
+
+            # 2. Bottom capture (yview_moveto 1.0)
+            app._canvas.yview_moveto(1.0)
+            app._root.update()
+            time.sleep(0.2)
+            capture_window_to_png(hwnd, v2_bottom)
+            capture_window_to_png(hwnd, debug_bottom)
+
+            # 3. Reset scroll position
+            app._canvas.yview_moveto(0.0)
+            app._root.update()
 
             sc.status = "BLOCKED"
-            sc.screenshot_file = "debug_screenshots/05_permission_restricted_blocked.png"
-            sc.screenshot_size = os.path.getsize(debug_cap) if os.path.exists(debug_cap) else 0
+            sc.screenshot_top = "final_screenshots_v2/05_permission_restricted_blocked_top.png"
+            sc.screenshot_bottom = "final_screenshots_v2/05_permission_restricted_blocked_bottom.png"
+            sc.screenshot_size_top = os.path.getsize(v2_top) if os.path.exists(v2_top) else 0
+            sc.screenshot_size_bottom = os.path.getsize(v2_bottom) if os.path.exists(v2_bottom) else 0
             sc.evidence_summary = f"Actual GUI Result: {sc.actual_diagnosis} ({sc.actual_reason})."
             sc.notes = (
                 "BLOCKED by Windows OS Architecture: Denying read access via NTFS DACL prevents "
@@ -774,22 +801,47 @@ class Review3EvidenceRunner:
         sc.actual_diagnosis = badge_text.split("  ")[-1].strip().replace(" ", "_")
         sc.actual_reason = app._status_reason_lbl.cget("text")
 
-        target_path = os.path.join(_FINAL_SCREENSHOTS_DIR, screenshot_filename)
-        ok = capture_window_to_png(hwnd, target_path)
+        base_id = screenshot_filename.removesuffix(".png")
+        top_filename = f"{base_id}_top.png"
+        bottom_filename = f"{base_id}_bottom.png"
 
-        if ok and sc.actual_diagnosis == sc.expected_diagnosis:
-            sc.status = "PASS — captured and verified"
-            sc.screenshot_file = f"final_screenshots/{screenshot_filename}"
-            sc.screenshot_size = os.path.getsize(target_path)
+        legacy_path = os.path.join(_FINAL_SCREENSHOTS_DIR, screenshot_filename)
+        target_top = os.path.join(_FINAL_SCREENSHOTS_V2_DIR, top_filename)
+        target_bottom = os.path.join(_FINAL_SCREENSHOTS_V2_DIR, bottom_filename)
+
+        # 1. Top capture (yview_moveto 0.0)
+        app._canvas.yview_moveto(0.0)
+        app._root.update()
+        time.sleep(0.2)
+        ok_top = capture_window_to_png(hwnd, target_top)
+        capture_window_to_png(hwnd, legacy_path)
+
+        # 2. Bottom capture (yview_moveto 1.0)
+        app._canvas.yview_moveto(1.0)
+        app._root.update()
+        time.sleep(0.2)
+        ok_bottom = capture_window_to_png(hwnd, target_bottom)
+
+        # 3. Reset scroll position to top
+        app._canvas.yview_moveto(0.0)
+        app._root.update()
+
+        if ok_top and ok_bottom and sc.actual_diagnosis == sc.expected_diagnosis:
+            sc.status = "PASS — real GUI capture and result verified"
+            sc.screenshot_top = f"final_screenshots_v2/{top_filename}"
+            sc.screenshot_bottom = f"final_screenshots_v2/{bottom_filename}"
+            sc.screenshot_size_top = os.path.getsize(target_top)
+            sc.screenshot_size_bottom = os.path.getsize(target_bottom)
             self.logger.info(
                 f"  -> PASS: Diagnosis '{sc.actual_diagnosis}' matches expected. "
-                f"Saved screenshot: {screenshot_filename} ({sc.screenshot_size:,} bytes)"
+                f"Saved paired screenshots: {top_filename} ({sc.screenshot_size_top:,} bytes), "
+                f"{bottom_filename} ({sc.screenshot_size_bottom:,} bytes)"
             )
         else:
             sc.status = "FAIL"
             debug_path = os.path.join(_DEBUG_SCREENSHOTS_DIR, f"fail_{screenshot_filename}")
             capture_window_to_png(hwnd, debug_path)
-            sc.screenshot_file = f"debug_screenshots/fail_{screenshot_filename}"
+            sc.screenshot_top = f"debug_screenshots/fail_{screenshot_filename}"
             self.logger.warning(
                 f"  -> MISMATCH/CAPTURE ERROR: Expected '{sc.expected_diagnosis}', got '{sc.actual_diagnosis}'"
             )
@@ -819,7 +871,12 @@ class Review3EvidenceRunner:
 
         for sc in self.scenario_results:
             rel_fixture = os.path.relpath(sc.fixture_path, _PROJECT_ROOT).replace("\\", "/")
-            img_link = f"[`{os.path.basename(sc.screenshot_file)}`]({sc.screenshot_file})" if sc.screenshot_file else "—"
+            if sc.screenshot_top and sc.screenshot_bottom:
+                img_link = f"[`Top`]({sc.screenshot_top})<br/>[`Bottom`]({sc.screenshot_bottom})"
+            elif sc.screenshot_top:
+                img_link = f"[`Top`]({sc.screenshot_top})"
+            else:
+                img_link = "—"
             content.append(
                 f"| **{sc.scenario_id}** | {sc.name} | {sc.category} | `{sc.operation}` | "
                 f"`{sc.expected_diagnosis}` | `{sc.actual_diagnosis}` | **{sc.status}** | "
@@ -835,7 +892,7 @@ class Review3EvidenceRunner:
             "| Operation | Evaluated Semantics | Engine Implementation | Windows Execution Guarantee | Verified Demonstrations |",
             "| :--- | :--- | :--- | :--- | :--- |",
             "| **READ** | Inspects read permissions, active locks, attributes. | `os.access(R_OK)` + Restart Manager | Yes (Standard OS read access) | Scenarios 01, 02, 04b, 05, 06, 07, 09, 13, 14 |",
-            "| **WRITE** | Inspects write access, read-only bits, contention locks. | `os.access(W_OK)` + `GetFileAttributesW` + Restart Manager | Yes (Read-only blocks write) | Scenarios 03, 04a, 08 |",
+            "| **WRITE** | Inspects write access, read-only bits, contention locks. | `os.access(W_OK)` + `GetFileAttributesW` + Restart Manager | Yes (Read-only blocks write) | Scenarios 03, 04a, 08; also covered in `test_diagnoser.py` |",
             "| **EXECUTE** | Evaluates execute permissions statically. | `os.access(X_OK)` + ownership check | Diagnostic check only; file is NEVER executed | Scenario 10 (`08_execute_check.cmd`) |",
             "| **DELETE** | Evaluates deletion rights without modifying disk. | `os.access(W_OK)` + read-only check | Diagnostic check only; file is NEVER deleted | Scenarios 11 (Allowed), 12 (Read-only blocked) |",
             "",
@@ -846,11 +903,11 @@ class Review3EvidenceRunner:
             "| Attribute Flag | Hex Mask | Detected by Analyzer | Operational Effect on WRITE | Operational Effect on READ | Demonstrated Scenario |",
             "| :--- | :--- | :--- | :--- | :--- | :--- |",
             "| **READONLY** | `0x0001` | Yes (`is_readonly=True`) | Blocks write (`READ_ONLY`) | Permitted (`OPERATION_ALLOWED`) | Scenarios 04a, 04b, 08, 12 |",
-            "| **HIDDEN** | `0x0002` | Yes (`is_hidden=True`) | Permitted (secondary info) | Permitted (secondary info) | Scenario 06 (`06_file_attributes_hidden_archive.png`) |",
-            "| **SYSTEM** | `0x0004` | Yes (`is_system=True`) | Permitted (secondary info) | Permitted (secondary info) | Scenario 13 (`13_system_attribute_evidence.png`) |",
+            "| **HIDDEN** | `0x0002` | Yes (`is_hidden=True`) | Permitted (secondary info) | Permitted (secondary info) | Scenario 06 (`06_file_attributes_hidden_archive`) |",
+            "| **SYSTEM** | `0x0004` | Yes (`is_system=True`) | Permitted (secondary info) | Permitted (secondary info) | Scenario 13 (`13_system_attribute_evidence`) |",
             "| **ARCHIVE** | `0x0020` | Yes (`is_archive=True`) | Permitted (standard file) | Permitted (standard file) | Scenarios 01, 03, 06, 13 |",
-            "| **REPARSE_POINT** | `0x0400` | Yes (`is_reparse_point=True`) | Evaluated in sync analyzer | Evaluated in sync analyzer | Unit tested in `test_sync_conflict.py` |",
-            "| **OFFLINE** | `0x1000` | Yes (`is_offline=True`) | Evaluated in sync analyzer | Evaluated in sync analyzer | Unit tested in `test_sync_conflict.py` |",
+            "| **REPARSE_POINT** | `0x0400` | Yes (`is_reparse_point=True`) | Evaluated in sync analyzer | Evaluated in sync analyzer | Unit tested in `test_sync_conflict.py` (PASS — automated result verified) |",
+            "| **OFFLINE** | `0x1000` | Yes (`is_offline=True`) | Evaluated in sync analyzer | Evaluated in sync analyzer | Unit tested in `test_sync_conflict.py` (PASS — automated result verified) |",
             "",
             "---",
             "",
@@ -879,15 +936,24 @@ class Review3EvidenceRunner:
             "",
             "---",
             "",
-            "## Final Verified Screenshots",
+            "## Final Verified Screenshots (v2 Paired Viewport Captures)",
             "",
-            "| Scenario ID | Name | Target Fixture | Operation | Expected Diagnosis | Actual Diagnosis | Verification Status | Screenshot Deliverable | Evidence Notes |",
+            "To solve the scrollbar truncation defect without artificial image stitching, each scenario is captured natively at two scroll positions:",
+            "- **Top View (`*_top.png`)**: Upper viewport at scroll position 0.0 showing Window title, file path, operation radio buttons, Primary Diagnosis badge, explanatory reason, Process Lock table, and Effective Permissions.",
+            "- **Bottom View (`*_bottom.png`)**: Lower viewport programmatically scrolled to position 1.0 (`yview_moveto(1.0)`) showing the complete File Attributes bitmask table, Cloud Synchronization status and daemon detection, and the Context-Aware Suggested Action recommendation.",
+            "",
+            "| Scenario ID | Name | Target Fixture | Operation | Expected Diagnosis | Actual Diagnosis | Verification Status | Paired Screenshots | Evidence Notes |",
             "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
         ]
 
         for sc in self.scenario_results:
             rel_fixture = os.path.relpath(sc.fixture_path, _PROJECT_ROOT).replace("\\", "/")
-            img_link = f"[`{sc.screenshot_file}`]({sc.screenshot_file})" if sc.screenshot_file else "—"
+            if sc.screenshot_top and sc.screenshot_bottom:
+                img_link = f"[`Top ({sc.screenshot_size_top:,} B)`]({sc.screenshot_top})<br/>[`Bottom ({sc.screenshot_size_bottom:,} B)`]({sc.screenshot_bottom})"
+            elif sc.screenshot_top:
+                img_link = f"[`Top ({sc.screenshot_size_top:,} B)`]({sc.screenshot_top})"
+            else:
+                img_link = "—"
             content.append(
                 f"| **{sc.scenario_id}** | {sc.name} | `{rel_fixture}` | `{sc.operation}` | "
                 f"`{sc.expected_diagnosis}` | `{sc.actual_diagnosis}` | **{sc.status}** | "
@@ -900,8 +966,10 @@ class Review3EvidenceRunner:
             "",
             "## Verification Status Key",
             "",
-            "- **PASS — captured and verified**: Executed live on Windows through the real GUI. The returned diagnosis matched expected root cause, and a verified PNG screenshot was captured.",
+            "- **PASS — real GUI capture and result verified**: Executed live on Windows through the real GUI. The returned diagnosis matched expected root cause, and complete paired PNG screenshots (top and lower viewport) were captured.",
+            "- **PASS — automated result verified**: Verified via comprehensive automated regression suite (e.g. simulated DACL barriers, reparse points, and sync locks).",
             "- **BLOCKED**: Could not be reproduced due to a documented OS architectural constraint (e.g. Restart Manager returning Win32 Error 5 when access is denied, causing UNKNOWN_ERROR). Documented honestly without faking results.",
+            "- **NOT_REPRODUCED**: Safety constraint prevented live mutation (e.g. creating test files in live user OneDrive/Google Drive roots).",
             "- **FAIL**: An unexpected assertion mismatch or window capture error occurred.",
             "",
         ])
@@ -945,12 +1013,12 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
 
 - **Platform**: Windows 11 Pro 64-bit, Python 3.12.3, Tkinter 8.6.
 - **Automated Regression Suite**:
-  - **155 collected tests**, **154 passed**, **0 failed**, **1 skipped** (`test_reopen_audit_reopen_failure_returns_false` requiring exclusive OS handle lock).
+  - **156 collected tests**, **155 passed**, **0 failed**, **1 skipped** (`test_reopen_audit_reopen_failure_returns_false` requiring exclusive OS handle lock).
   - Test log: `artifacts/review3/logs/test_results.txt`.
 - **Live GUI Demonstration Suite**:
   - **14 scenarios executed live on Windows 11**.
-  - **13 scenarios passed and captured as high-resolution PNGs** in `artifacts/review3/final_screenshots/`.
-  - **1 scenario (Scenario 05: Permission Restriction) evaluated safely and accurately classified as BLOCKED** by OS architecture (Windows Restart Manager returns Win32 Error 5 when access is denied, causing `UNKNOWN_ERROR`). Diagnostic capture saved in `artifacts/review3/debug_screenshots/05_permission_restricted_blocked.png`.
+  - **13 scenarios passed and captured as complete paired top/bottom PNGs** in `artifacts/review3/final_screenshots_v2/`.
+  - **1 scenario (Scenario 05: Permission Restriction) evaluated safely and accurately classified as BLOCKED** by OS architecture (Windows Restart Manager returns Win32 Error 5 when access is denied, causing `UNKNOWN_ERROR`). Paired captures saved in both `artifacts/review3/debug_screenshots/` and `artifacts/review3/final_screenshots_v2/`.
 
 ---
 
@@ -974,7 +1042,7 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
 
 1. **Adhere Strictly to Real Evidence**: Do not claim that DACL denial was demonstrated as `PERMISSION_DENIED`—honestly explain the OS Restart Manager Error 5 finding.
 2. **Highlight Operation Semantics**: Emphasize how `READ_ONLY` blocks `WRITE` and `DELETE`, but allows `READ` and `EXECUTE`.
-3. **Reference the Genuine Screenshots**: Use the filenames from `artifacts/review3/final_screenshots/` with exact captions.
+3. **Reference the Genuine Screenshots**: Use the filenames from `artifacts/review3/final_screenshots_v2/` with exact captions explaining the paired top and bottom viewports.
 """
         with open(_README_CLAUDE_PATH, "w", encoding="utf-8") as f:
             f.write(content)
@@ -988,6 +1056,7 @@ The application diagnoses why a requested file operation (READ, WRITE, EXECUTE, 
         """Create Review3_Evidence_Pack_v2.zip preserving all deliverables."""
         self.logger.info("Packaging Review3_Evidence_Pack_v2.zip...")
         items_to_zip = [
+            ("final_screenshots_v2", _FINAL_SCREENSHOTS_V2_DIR),
             ("final_screenshots", _FINAL_SCREENSHOTS_DIR),
             ("screenshots", _SCREENSHOTS_DIR),
             ("debug_screenshots", _DEBUG_SCREENSHOTS_DIR),
@@ -1045,7 +1114,10 @@ def main():
     runner.generate_manifest()
     runner.generate_readme_for_claude()
 
-    print("\nDemonstrations and manifest generated successfully.\n")
+    # 4. Package Evidence Pack v2
+    runner.package_evidence_zip_v2()
+
+    print("\nDemonstrations, manifest, and evidence package generated successfully.\n")
 
 
 if __name__ == "__main__":

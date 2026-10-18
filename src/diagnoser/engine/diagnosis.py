@@ -181,6 +181,9 @@ class DiagnosisEngine:
         if diagnosis_type not in (DiagnosisType.FILE_LOCKED, DiagnosisType.SYNC_CONFLICT) and lock_res and lock_res.is_locked:
             secondary_notes.append("File is also locked by an active process")
 
+        if diagnosis_type == DiagnosisType.PERMISSION_DENIED and lock_res and lock_res.error:
+            secondary_notes.append(f"Lock inspection could not complete: {lock_res.error}")
+
         if secondary_notes:
             full_reason = f"{primary_reason} ({'; '.join(secondary_notes)}.)"
         else:
@@ -287,17 +290,21 @@ class DiagnosisEngine:
                 )
                 return DiagnosisType.READ_ONLY, reason
 
-        # 4. Critical inspection failures (precede permission denial when inspection was impossible)
+        # 4. Proven permission denial (independent verified evidence from Permission Analyzer)
+        if perm_res and not perm_res.permitted and perm_res.detection_method != "error":
+            return DiagnosisType.PERMISSION_DENIED, self._build_permission_reason(operation, perm_res)
+
+        # 5. Critical inspection failures (precede success when inspection was blocked/impossible)
         if perm_res and perm_res.error and perm_res.detection_method == "error":
             return DiagnosisType.UNKNOWN_ERROR, f"Permission inspection error: {perm_res.error}"
         if lock_res and lock_res.error and lock_res.detection_method == "error":
             return DiagnosisType.UNKNOWN_ERROR, f"Lock inspection error: {lock_res.error}"
 
-        # 5. Permission denial (user lacks requested access rights)
+        # 6. Fallback permission check (if any other permission failure was reported)
         if perm_res and not perm_res.permitted:
             return DiagnosisType.PERMISSION_DENIED, self._build_permission_reason(operation, perm_res)
 
-        # 6. No blocking condition detected
+        # 7. No blocking condition detected
         return (
             DiagnosisType.OPERATION_ALLOWED,
             "The requested operation is permitted and no lock was detected.",

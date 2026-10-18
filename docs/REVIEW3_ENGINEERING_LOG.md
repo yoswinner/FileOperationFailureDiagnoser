@@ -363,4 +363,38 @@ Window captures were performed via zero-dependency native Win32/GDI+ capture API
 - **Files**: `scripts/capture_review3_evidence.py`, `scripts/build_review3_demo_guide.py`, `scripts/prepare_teacher_demo_fixtures.ps1`, `scripts/restore_teacher_demo_fixtures.ps1`, `scripts/hold_demo_file_open.py`, `docs/REVIEW3_ENGINEERING_LOG.md`, `artifacts/review3/*`.
 - **Summary**: Conducted complete evidence-coverage audit across all 4 operations (READ, WRITE, EXECUTE, DELETE), attribute combinations (ReadOnly, Hidden, System, Archive), Restart Manager process locks, deterministic multi-finding priority resolution, and panel resets. Expanded automated screenshot suite to 14 verified live PNG captures saved in `artifacts/review3/final_screenshots/`. Created persistent reusable teacher demonstration fixtures and student catalog in `artifacts/review3/demo_fixtures/teacher_demo/`. Built safe PowerShell prepare/restore scripts and dedicated lock helper. Generated comprehensive illustrated Teacher Demonstration Guide in Word (`Review3_Demo_Guide.docx`), Markdown (`Review3_Demo_Guide.md`), and PDF (`Review3_Demo_Guide.pdf`) with embedded screenshots. Produced `evidence_coverage_matrix.md`, updated `screenshot_manifest.md` and `README_FOR_CLAUDE.md`, and packaged `Review3_Evidence_Pack_v2.zip` (44 files, ~1.3MB).
 - **Tests**: 155 collected, 154 passed, 0 failed, 1 skipped on Windows 11.
-- **Commit Target**: `docs: add Review 3 demonstration guide and evidence coverage`.
+- **Commit**: `4283148` (`docs: add Review 3 demonstration guide and evidence coverage`).
+
+### Final Project Audit, Screenshot Completeness and README Finalization
+- **Files**:
+  - `src/diagnoser/engine/diagnosis.py`
+  - `src/diagnoser/gui/main_window.py`
+  - `tests/test_diagnoser.py`
+  - `scripts/capture_review3_evidence.py`
+  - `scripts/build_review3_demo_guide.py`
+  - `artifacts/review3/Review3_Demo_Guide.md`
+  - `README.md`
+  - `docs/REVIEW3_ENGINEERING_LOG.md`
+  - `artifacts/review3/final_screenshots_v2/*`
+  - `artifacts/review3/evidence_coverage_matrix.md`
+  - `artifacts/review3/screenshot_manifest.md`
+  - `artifacts/review3/README_FOR_CLAUDE.md`
+  - `artifacts/review3/Review3_Evidence_Pack_v2.zip`
+- **Technical & Architectural Findings**:
+  1. **Screenshot Viewport Completeness**:
+     - *Issue Identified*: Single-frame 1024x720 captures exhibited vertical scrollbars and truncated the lower 25% of the GUI (File Attributes flags, Cloud Synchronization panel, and Recommended Action). Native GUI content height is 1,126px, which exceeds standard vertical display resolution on the target host (1440x900).
+     - *Solution*: Exposed canvas scrolling via `MainWindow._canvas.yview_moveto(0.0)` and `1.0`. Updated `capture_review3_evidence.py` to capture paired native viewports (`*_top.png` and `*_bottom.png`) for all 14 scenarios into `artifacts/review3/final_screenshots_v2/` (30 unclipped images). Completely avoids synthetic stitching while guaranteeing 100% visible evidence.
+  2. **Permission Denial vs. Lock Inspection Error Resolution**:
+     - *Issue Identified*: When a file has explicit ACL restrictions, Windows Restart Manager API fails with Win32 Error 5 (`ERROR_ACCESS_DENIED`). Previously, priority rule 4 in `DiagnosisEngine._classify` returned `UNKNOWN_ERROR` on any `lock_res.error` before checking `perm_res`.
+     - *Correction*: Narrowed priority rule 4 so that if `perm_res` independently proves access denial (`perm_res and not perm_res.permitted and perm_res.detection_method != "error"`), the engine correctly classifies the primary outcome as `PERMISSION_DENIED` and retains the lock inspection error as secondary evidence in `secondary_notes`. On live Windows with NTFS DACLs, `os.access()` delegates to CRT `_access()` which only checks DOS attributes, so `UNKNOWN_ERROR` is honestly preserved for live DACL barriers.
+     - *Regression Coverage*: Added `test_proven_permission_denial_not_masked_by_lock_inspection_error` to `tests/test_diagnoser.py`.
+  3. **Teacher Demonstration Kit Validation**:
+     - Audited all 8 fixtures (`01` through `08`), `scripts/prepare_teacher_demo_fixtures.ps1`, `scripts/restore_teacher_demo_fixtures.ps1`, and `scripts/hold_demo_file_open.py`. Confirmed strictly non-destructive operation bounded to `artifacts/review3/demo_fixtures/teacher_demo/`.
+  4. **Illustrated Demonstration Guides**:
+     - Rebuilt `Review3_Demo_Guide.docx` (30,944 bytes) and `Review3_Demo_Guide.pdf` (1,152,427 bytes) via Microsoft Word COM, embedding paired upper and lower viewport screenshots with descriptive captions. Updated `Review3_Demo_Guide.md`.
+  5. **Root README Overhaul**:
+     - Rewrote `README.md` completely to reflect the finished Review 3 application, documenting all 17 required topics including the four peer analyzers, 7 priority rules, operation semantics, technological distinctions (Restart Manager vs psutil, effective access vs full DACL, read-only attributes, OneDrive/Google Drive bounding), launch instructions, and latest test metrics.
+  6. **Evidence Packaging**:
+     - Consolidated all deliverables into `artifacts/review3/Review3_Evidence_Pack_v2.zip` (2,802,464 bytes, 76 items), passing automated archive integrity testing with 0 corrupt files.
+- **Tests**: 156 collected, 155 passed, 0 failed, 1 skipped on Windows 11 Pro 64-bit (Build 26300, `Python 3.13.14`, `pytest 9.1.1`).
+- **Commit Target**: `docs: finalize Review 3 readiness and project README`.

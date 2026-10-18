@@ -294,6 +294,7 @@ class MainWindow:
         canvas = tk.Canvas(
             self._root, bg=_COLOURS["bg"], highlightthickness=0,
         )
+        self._canvas = canvas
         scrollbar = ttk.Scrollbar(
             self._root, orient="vertical", command=canvas.yview,
         )

@@ -17,6 +17,7 @@ import time
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _ARTIFACTS_DIR = os.path.join(_PROJECT_ROOT, "artifacts", "review3")
 _SCREENSHOTS_DIR = os.path.join(_ARTIFACTS_DIR, "final_screenshots")
+_V2_SCREENSHOTS_DIR = os.path.join(_ARTIFACTS_DIR, "final_screenshots_v2")
 _HTML_PATH = os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.html")
 _DOCX_PATH = os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.docx")
 _PDF_PATH = os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.pdf")
@@ -25,6 +26,26 @@ _PDF_PATH = os.path.join(_ARTIFACTS_DIR, "Review3_Demo_Guide.pdf")
 def build_html_content() -> str:
     """Generate comprehensive HTML content with embedded screenshots and clean styling."""
     def img_tag(filename: str, caption: str) -> str:
+        base_id = filename.removesuffix(".png")
+        top_filename = f"{base_id}_top.png"
+        bottom_filename = f"{base_id}_bottom.png"
+        top_path = os.path.join(_V2_SCREENSHOTS_DIR, top_filename)
+        bottom_path = os.path.join(_V2_SCREENSHOTS_DIR, bottom_filename)
+
+        if os.path.exists(top_path) and os.path.exists(bottom_path):
+            top_uri = top_path.replace("\\", "/")
+            bottom_uri = bottom_path.replace("\\", "/")
+            return f"""
+            <div class="figure-container">
+                <p class="caption"><strong>Figure (Upper Viewport):</strong> {caption} — Controls, Status Badge & Process Locks</p>
+                <img src="{top_uri}" alt="{caption} - Upper" class="screenshot" />
+            </div>
+            <div class="figure-container">
+                <p class="caption"><strong>Figure (Lower Viewport):</strong> {caption} — File Attributes, Cloud Sync & Recommendations</p>
+                <img src="{bottom_uri}" alt="{caption} - Lower" class="screenshot" />
+            </div>
+            """
+
         full_path = os.path.join(_SCREENSHOTS_DIR, filename).replace("\\", "/")
         return f"""
         <div class="figure-container">

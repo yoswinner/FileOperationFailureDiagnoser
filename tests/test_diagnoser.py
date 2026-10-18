@@ -867,6 +867,45 @@ class TestDiagnosisEngineIntegrationReview3:
         finally:
             os.unlink(temp_path)
 
+    def test_proven_permission_denial_not_masked_by_lock_inspection_error(self):
+        """When permission analyzer reliably proves access denial, a lock inspection
+        error (e.g. Restart Manager ERROR_ACCESS_DENIED) must not mask the primary
+        permission finding as UNKNOWN_ERROR, but should be preserved as secondary evidence.
+        """
+        mock_perm = MagicMock()
+        mock_perm.analyze.return_value = PermissionCheckResult(
+            file_path="/test/file.txt",
+            permitted=False,
+            owner="CORP\\Administrator",
+            details="Discretionary ACL denies read access",
+            detection_method="windows_acl",
+        )
+        mock_lock = MagicMock()
+        mock_lock.analyze.return_value = LockDetectionResult(
+            file_path="/test/file.txt",
+            is_locked=False,
+            error="RmGetList failed with error code 5.",
+            detection_method="error",
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            temp_path = f.name
+
+        try:
+            engine = DiagnosisEngine(
+                permission_analyzer=mock_perm,
+                lock_analyzer=mock_lock,
+            )
+            result = engine.diagnose(temp_path, FileOperation.READ)
+
+            assert result.diagnosis == DiagnosisType.PERMISSION_DENIED
+            assert "CORP\\Administrator" in result.reason
+            assert "Lock inspection could not complete" in result.reason
+            assert result.lock_result.error == "RmGetList failed with error code 5."
+            assert "permissions" in result.suggested_action.lower() or "administrator" in result.suggested_action.lower()
+        finally:
+            os.unlink(temp_path)
+
     def test_multiple_simultaneous_findings_preserve_all_evidence(self):
         """When lock, read-only, and sync folder coexist, primary is FILE_LOCKED
         and all secondary findings are preserved in results and reason.
