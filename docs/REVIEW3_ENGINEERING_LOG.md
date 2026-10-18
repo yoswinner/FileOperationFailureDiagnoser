@@ -264,25 +264,31 @@ When multiple failure conditions coexist on a single file, the Diagnosis Engine 
 
 ---
 
-## 8. Automated GUI Demonstration and Screenshot Plan
+### 8. Automated GUI Demonstration and Screenshot Plan
 
-The visual evidence automation was executed in Sprint 5 using `scripts/capture_review3_evidence.py`, exercising the real desktop Tkinter GUI, `DiagnosisEngine`, and all four peer analyzers on Windows 11 without mocks or synthetic result objects.
+The visual evidence automation was executed in Sprint 5 and expanded during the Final Evidence Completion phase using `scripts/capture_review3_evidence.py` and `scripts/build_review3_demo_guide.py`. The suite exercises the real desktop Tkinter GUI, `DiagnosisEngine`, and all four peer analyzers on Windows 11 without mocks or synthetic result objects.
 
 Window captures were performed via zero-dependency native Win32/GDI+ capture APIs (`user32.PrintWindow` with `PW_RENDERFULLCONTENT` and `gdiplus.GdipSaveImageToFile`) to obtain crisp, pixel-perfect window captures even across virtual or background execution sessions.
 
-### Executed Demonstration Portfolio Matrix
+### Executed Demonstration Portfolio Matrix (Final Expanded Set)
 
 | Scenario ID | Description | Target / Fixture | Op | Expected Diagnosis | Actual Diagnosis | Screenshot Path | Status | Verification Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **01** | Baseline Normal File | `demo_fixtures/01_normal_file.txt` | READ | `OPERATION_ALLOWED` | `OPERATION_ALLOWED` | `screenshots/01_normal_file.png` | PASS — captured and verified | All 4 panels populated: no lock, permissions granted, standard attributes, non-sync directory. |
-| **02** | Nonexistent File | `demo_fixtures/nonexistent_file_xyz.txt` | READ | `FILE_NOT_FOUND` | `FILE_NOT_FOUND` | `screenshots/02_file_not_found.png` | PASS — captured and verified | Structured missing-target guidance. All 4 panels honestly show checks skipped or unavailable. |
-| **03** | Active Process Lock | `demo_fixtures/03_locked_file.txt` | WRITE | `FILE_LOCKED` | `FILE_LOCKED` | `screenshots/03_process_locked.png` | PASS — captured and verified | Real Restart Manager detection. Helper process name (`python.exe`), PID, and executable path captured. |
-| **04** | Read-Only Attribute | `demo_fixtures/04_readonly_file.txt` | WRITE | `READ_ONLY` | `READ_ONLY` | `screenshots/04_read_only_write.png` | PASS — captured and verified | Read-only bit detected via `GetFileAttributesW`; explanation shows WRITE/DELETE blocked. Reversible cleanup in `finally`. |
-| **05** | Permission Restriction | `demo_fixtures/05_perm_restricted.txt` | READ | `PERMISSION_DENIED` | `UNKNOWN_ERROR` | `debug_screenshots/05_permission_restricted_blocked.png` | BLOCKED | Windows OS constraint: `RestartManager.RmGetList` returns Win32 Error 5 (`ERROR_ACCESS_DENIED`) when an explicit Deny-Read ACE is set. Engine priority rule 4 classifies inspection failure as `UNKNOWN_ERROR` ("Lock inspection error: RmGetList failed with error code 5") rather than fabricating lock status. Honestly labeled; diagnostic capture preserved. |
-| **06** | File Attribute Evidence | `demo_fixtures/06_attributed_file.txt` | READ | `OPERATION_ALLOWED` | `OPERATION_ALLOWED` | `screenshots/06_file_attribute_evidence.png` | PASS — captured and verified | Hidden + Archive attributes applied and inspected; engine correctly concludes READ is allowed. Attributes restored in `finally`. |
-| **07** | Cloud-Sync Negative Evidence | `demo_fixtures/07_cloud_sync_test.txt` | READ | `OPERATION_ALLOWED` | `OPERATION_ALLOWED` | `screenshots/07_cloud_sync_evidence.png` | PASS — captured and verified | Target is outside provider sync roots. Panel displays genuine `No provider association detected`. No artificial sync state manufactured. |
-| **08** | Multiple Coexisting Findings | `demo_fixtures/08_multi_finding.txt` | WRITE | `FILE_LOCKED` | `FILE_LOCKED` | `screenshots/08_multiple_findings.png` | PASS — captured and verified | File locked by helper subprocess AND flagged Read-Only. Primary diagnosis correctly resolves to `FILE_LOCKED`; attribute panel preserves Read-Only flag as secondary evidence. |
-| **09** | Target Inspection Error | `demo_fixtures/` (Directory) | READ | `UNKNOWN_ERROR` | `UNKNOWN_ERROR` | `screenshots/09_inspection_error.png` | PASS — captured and verified | Directory target causes clean diagnostic handling (`Permission inspection error: Target is a directory`). Panels display individual status indicators. |
+| **01** | Baseline Normal File | `teacher_demo/01_normal_file.txt` | READ | `OPERATION_ALLOWED` | `OPERATION_ALLOWED` | `final_screenshots/01_normal_file_read.png` | PASS — captured and verified | All 4 panels populated: no lock, permissions granted, standard Archive attribute (0x0020), non-sync directory. |
+| **02** | Nonexistent File Target | `demo_fixtures/nonexistent_target_xyz.txt` | READ | `FILE_NOT_FOUND` | `FILE_NOT_FOUND` | `final_screenshots/02_file_not_found.png` | PASS — captured and verified | Structured missing-target guidance. All 4 panels honestly show checks skipped. |
+| **03** | Active Process Lock | `teacher_demo/05_locked_file.txt` | WRITE | `FILE_LOCKED` | `FILE_LOCKED` | `final_screenshots/03_process_locked_write.png` | PASS — captured and verified | Real Restart Manager detection. Helper process name (`python.exe`), PID, and executable path captured. |
+| **04a** | Read-Only Attribute (WRITE) | `teacher_demo/02_read_only_file.txt` | WRITE | `READ_ONLY` | `READ_ONLY` | `final_screenshots/04a_read_only_write.png` | PASS — captured and verified | Read-only bit detected via `GetFileAttributesW`; explanation shows WRITE/DELETE blocked. Reversible cleanup in `finally`. |
+| **04b** | Read-Only Attribute (READ) | `teacher_demo/02_read_only_file.txt` | READ | `OPERATION_ALLOWED` | `OPERATION_ALLOWED` | `final_screenshots/04b_read_only_read.png` | PASS — captured and verified | Critical semantic contrast: proves Read-Only flag does NOT block READ operations. |
+| **05** | Permission Restriction | `teacher_demo/06_permission_restricted_file.txt` | READ | `PERMISSION_DENIED` | `UNKNOWN_ERROR` | `debug_screenshots/05_permission_restricted_blocked.png` | BLOCKED | Windows OS constraint: `RestartManager.RmGetList` returns Win32 Error 5 (`ERROR_ACCESS_DENIED`) when an explicit Deny-Read ACE is set. Engine priority rule 4 classifies inspection failure as `UNKNOWN_ERROR` rather than fabricating lock status. Honestly labeled; diagnostic capture preserved. |
+| **06** | File Attribute Evidence | `teacher_demo/03_hidden_archive_file.txt` | READ | `OPERATION_ALLOWED` | `OPERATION_ALLOWED` | `final_screenshots/06_file_attributes_hidden_archive.png` | PASS — captured and verified | Hidden + Archive attributes applied (0x0022); engine correctly concludes READ is allowed. Attributes restored in `finally`. |
+| **07** | Cloud-Sync Negative Evidence | `teacher_demo/01_normal_file.txt` | READ | `OPERATION_ALLOWED` | `OPERATION_ALLOWED` | `final_screenshots/07_cloud_sync_negative.png` | PASS — captured and verified | Target is outside provider sync roots. Panel displays genuine `No provider association detected`. No artificial sync state manufactured. |
+| **08** | Multiple Coexisting Findings | `teacher_demo/05_locked_file.txt` | WRITE | `FILE_LOCKED` | `FILE_LOCKED` | `final_screenshots/08_multiple_findings_lock_and_readonly.png` | PASS — captured and verified | File locked by helper subprocess AND flagged Read-Only. Primary diagnosis correctly resolves to `FILE_LOCKED`; attribute panel preserves Read-Only flag as secondary evidence. |
+| **09** | Target Inspection Error | `teacher_demo/` (Directory) | READ | `UNKNOWN_ERROR` | `UNKNOWN_ERROR` | `final_screenshots/09_inspection_error_directory.png` | PASS — captured and verified | Directory target causes clean diagnostic handling (`Permission inspection error: Target is a directory`). Panels display individual status indicators. |
+| **10** | Operation Coverage: EXECUTE | `teacher_demo/08_execute_check.cmd` | EXECUTE | `OPERATION_ALLOWED` | `OPERATION_ALLOWED` | `final_screenshots/10_operation_execute.png` | PASS — captured and verified | Evaluates execute permissions statically. Target script is never executed. |
+| **11** | Operation Coverage: DELETE Allowed | `teacher_demo/07_delete_check_file.txt` | DELETE | `OPERATION_ALLOWED` | `OPERATION_ALLOWED` | `final_screenshots/11_operation_delete_allowed.png` | PASS — captured and verified | Evaluates deletion rights without deleting the target file. File remains intact on disk. |
+| **12** | Operation Coverage: DELETE Read-Only | `teacher_demo/02_read_only_file.txt` | DELETE | `READ_ONLY` | `READ_ONLY` | `final_screenshots/12_operation_delete_readonly.png` | PASS — captured and verified | Evaluates deletion rights against read-only target. Engine diagnoses `READ_ONLY` blocks DELETE. |
+| **13** | System Attribute Evidence | `teacher_demo/04_system_attribute_file.txt` | READ | `OPERATION_ALLOWED` | `OPERATION_ALLOWED` | `final_screenshots/13_system_attribute_evidence.png` | PASS — captured and verified | Decodes Win32 `FILE_ATTRIBUTE_SYSTEM` (0x0004) alongside Archive (0x0024); verifies read is permitted. |
+| **14** | Re-Diagnosis & Clean Panel Reset | `teacher_demo/01_normal_file.txt` | READ | `OPERATION_ALLOWED` | `OPERATION_ALLOWED` | `final_screenshots/14_reset_stale_clearing.png` | PASS — captured and verified | Diagnoses locked file then immediately re-diagnoses normal file. Verifies `_reset_panels()` clears previous telemetry completely. |
 
 ---
 
@@ -308,14 +314,15 @@ Window captures were performed via zero-dependency native Win32/GDI+ capture API
 - [x] Sprint 4: Live Windows GUI desktop launch and interactive diagnosis verified (`diagnoser.gui.app`).
 - [x] Sprint 5: Automated real-GUI screenshot capture runner implemented (`scripts/capture_review3_evidence.py`).
 - [x] Sprint 5: Zero-dependency native Win32/GDI+ window capture implementation (`user32.PrintWindow` + `gdiplus.GdipSaveImageToFile`).
-- [x] Sprint 5: 8 genuine demonstration scenarios captured and verified (`artifacts/review3/screenshots/`).
-- [x] Sprint 5: Scenario 5 (Permission Restriction) evaluated honestly and documented as `BLOCKED` with diagnostic capture.
-- [x] Sprint 5: Complete test suite executed and logged to `artifacts/review3/logs/test_results.txt` (155 collected, 154 passed, 1 skipped, 0 failed).
-- [x] Sprint 5: Full scenario execution log generated (`artifacts/review3/logs/scenario_run.log`).
-- [x] Sprint 5: Screenshot manifest created (`artifacts/review3/screenshot_manifest.md`).
-- [x] Sprint 5: Handoff package guide created (`artifacts/review3/README_FOR_CLAUDE.md`).
-- [x] Sprint 5: Complete evidence archive packaged and verified (`artifacts/review3/Review3_Evidence_Pack.zip`).
-- [ ] Post-Sprint 5: Final Review 3 report and PowerPoint presentation generation via Claude Chat handoff.
+- [x] Sprint 5: Initial demonstration scenarios captured and verified (`artifacts/review3/screenshots/`).
+- [x] Final Evidence Phase: Complete evidence-coverage audit conducted across all 4 operations, attribute bitmasks, lock conditions, and priority rules.
+- [x] Final Evidence Phase: Expanded screenshot portfolio captured (14 verified PNGs in `artifacts/review3/final_screenshots/`).
+- [x] Final Evidence Phase: Reusable, persistent teacher demonstration fixtures and catalog created (`artifacts/review3/demo_fixtures/teacher_demo/`).
+- [x] Final Evidence Phase: Safe fixture management scripts implemented (`scripts/prepare_teacher_demo_fixtures.ps1`, `scripts/restore_teacher_demo_fixtures.ps1`, `scripts/hold_demo_file_open.py`).
+- [x] Final Evidence Phase: Illustrated Teacher Demonstration Guide created in Word (`Review3_Demo_Guide.docx`), Markdown (`Review3_Demo_Guide.md`), and PDF (`Review3_Demo_Guide.pdf`).
+- [x] Final Evidence Phase: Consolidated Evidence Pack v2 packaged and verified (`artifacts/review3/Review3_Evidence_Pack_v2.zip`).
+- [x] Final Evidence Phase: Handoff package guide updated (`artifacts/review3/README_FOR_CLAUDE.md`).
+- [ ] Post-Review 3 Implementation: Final academic report and presentation deck generation via Claude Chat handoff.
 
 ---
 
@@ -350,5 +357,10 @@ Window captures were performed via zero-dependency native Win32/GDI+ capture API
 - **Files**: `scripts/capture_review3_evidence.py`, `.gitignore`, `docs/REVIEW3_ENGINEERING_LOG.md`, `artifacts/review3/*`.
 - **Summary**: Implemented automated live Windows GUI demonstration runner using native zero-dependency Win32/GDI+ capture (`user32.PrintWindow` + `gdiplus.GdipSaveImageToFile`). Created isolated disposable fixtures, controlled lock helper subprocess with guaranteed `finally` cleanup, and attribute restoration. Executed all 9 scenarios live on Windows 11 against the actual Tkinter GUI. 8 scenarios passed assertion and were captured as crisp PNGs in `artifacts/review3/screenshots/`. Scenario 5 was safely evaluated with icacls; Restart Manager correctly returned Win32 Error 5 on access denial, resulting in `UNKNOWN_ERROR` ("Lock inspection error: RmGetList failed with error code 5") rather than fabricating a fake lock analysis; honestly documented as `BLOCKED` with diagnostic capture in `debug_screenshots/`. Generated full regression log (155 collected, 154 passed, 1 skipped, 0 failed), scenario execution log, `screenshot_manifest.md`, `README_FOR_CLAUDE.md`, and validated `Review3_Evidence_Pack.zip` (298KB, 14 files).
 - **Tests**: 155 collected, 154 passed, 0 failed, 1 skipped on Windows 11.
-- **Evidence Runner**: Executed and verified via `.\venv\Scripts\python.exe scripts/capture_review3_evidence.py`.
-- **Commit Target**: `test: add automated Review 3 validation and GUI evidence capture`.
+- **Commit**: `2ebe9e1` (`test: add automated Review 3 validation and GUI evidence capture`).
+
+### Final Evidence Completion & Teacher Demonstration Kit
+- **Files**: `scripts/capture_review3_evidence.py`, `scripts/build_review3_demo_guide.py`, `scripts/prepare_teacher_demo_fixtures.ps1`, `scripts/restore_teacher_demo_fixtures.ps1`, `scripts/hold_demo_file_open.py`, `docs/REVIEW3_ENGINEERING_LOG.md`, `artifacts/review3/*`.
+- **Summary**: Conducted complete evidence-coverage audit across all 4 operations (READ, WRITE, EXECUTE, DELETE), attribute combinations (ReadOnly, Hidden, System, Archive), Restart Manager process locks, deterministic multi-finding priority resolution, and panel resets. Expanded automated screenshot suite to 14 verified live PNG captures saved in `artifacts/review3/final_screenshots/`. Created persistent reusable teacher demonstration fixtures and student catalog in `artifacts/review3/demo_fixtures/teacher_demo/`. Built safe PowerShell prepare/restore scripts and dedicated lock helper. Generated comprehensive illustrated Teacher Demonstration Guide in Word (`Review3_Demo_Guide.docx`), Markdown (`Review3_Demo_Guide.md`), and PDF (`Review3_Demo_Guide.pdf`) with embedded screenshots. Produced `evidence_coverage_matrix.md`, updated `screenshot_manifest.md` and `README_FOR_CLAUDE.md`, and packaged `Review3_Evidence_Pack_v2.zip` (44 files, ~1.3MB).
+- **Tests**: 155 collected, 154 passed, 0 failed, 1 skipped on Windows 11.
+- **Commit Target**: `docs: add Review 3 demonstration guide and evidence coverage`.
